@@ -13,6 +13,7 @@ import { InputTextModule } from 'primeng/inputtext';
 })
 export class PlanPanelComponent {
   @Input({ required: true }) planForm!: FormGroup;
+  @Input() visible = false;
   @Input() routeSelectionActive = false;
   @Input() draftWaypointCount = 0;
   @Input() savedPlanKeys: string[] = [];
@@ -21,9 +22,18 @@ export class PlanPanelComponent {
   @Input() finishDisabled = true;
   @Input() clearAllDisabled = true;
 
+  @Output() visibleChange = new EventEmitter<boolean>();
   @Output() mapRouteClick = new EventEmitter<void>();
   @Output() finishClick = new EventEmitter<void>();
   @Output() clearAllRoutesClick = new EventEmitter<void>();
+
+  onCancel(): void {
+    this.visibleChange.emit(false);
+  }
+
+  onVisibleChange(visible: boolean): void {
+    this.visibleChange.emit(visible);
+  }
 
   onSpeedInput(event: Event): void {
     const input = event.target as HTMLInputElement;

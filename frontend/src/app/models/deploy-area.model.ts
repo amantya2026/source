@@ -7,6 +7,6 @@ export interface DeployArea {
   radiusX: number;
   radiusY: number;
   rotation: number;
-  /** Custom boundary vertices (lon/lat). When set, the area renders as a polygon. */
+  /** Bezier anchor points (lon/lat) on the boundary. Curve is drawn through them. */
   vertices?: [number, number][];
 }

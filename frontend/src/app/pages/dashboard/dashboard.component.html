@@ -2,75 +2,119 @@
   <p-toast position="top-right" />
 
   <div class="map-shell">
-    <app-aerial-device-map
-      [routeSelectionEnabled]="routeSelectionActive && activePanel === 'plan' && savedPlans.length < maxPlans"
-      [deployEditingEnabled]="activePanel === 'deploy'"
-      (waypointAdded)="onWaypointAdded($event)"
-      (simulationStateChange)="onSimulationStateChange($event)"
-      (simulationFinished)="onSimulationFinished()"
-      (missionTimeChange)="onMissionTimeChange($event)"
-    />
-
     <aside class="sidebar">
       <div class="sidebar-brand">
         <i class="pi pi-send sidebar-brand__icon" aria-hidden="true"></i>
         <span class="sidebar-brand__title">Aerial Device Tracking</span>
       </div>
 
-      <p-card styleClass="sidebar-card">
-        <div class="sidebar-modes">
-          <div class="mode-buttons">
-            <button
-              type="button"
-              class="mode-card"
-              [class.mode-card--active]="activePanel === 'plan'"
-              (click)="onSidebarSelect('plan')"
-            >
-              <i class="pi pi-map mode-card__icon" aria-hidden="true"></i>
-              <span class="mode-card__label">Plan</span>
-            </button>
-            <button
-              type="button"
-              class="mode-card"
-              [class.mode-card--active]="activePanel === 'deploy'"
-              (click)="onSidebarSelect('deploy')"
-            >
-              <i class="pi pi-send mode-card__icon" aria-hidden="true"></i>
-              <span class="mode-card__label">Deploy</span>
-            </button>
-            <button
-              type="button"
-              class="mode-card"
-              [class.mode-card--active]="activePanel === 'opDash'"
-              (click)="onSidebarSelect('opDash')"
-            >
-              <i class="pi pi-desktop mode-card__icon" aria-hidden="true"></i>
-              <span class="mode-card__label">O/P Dashboard</span>
-            </button>
-          </div>
-        </div>
+      <nav class="sidebar-nav" aria-label="Dashboard modes">
+        <button
+          type="button"
+          class="sidebar-nav-btn"
+          [class.sidebar-nav-btn--active]="activePanel === 'plan'"
+          (click)="onSidebarSelect('plan')"
+        >
+          <i class="pi pi-map" aria-hidden="true"></i>
+          <span>Plan</span>
+        </button>
+        <button
+          type="button"
+          class="sidebar-nav-btn"
+          [class.sidebar-nav-btn--active]="activePanel === 'deploy'"
+          (click)="onSidebarSelect('deploy')"
+        >
+          <i class="pi pi-send" aria-hidden="true"></i>
+          <span>Deploy</span>
+        </button>
+        <button
+          type="button"
+          class="sidebar-nav-btn"
+          [class.sidebar-nav-btn--active]="activePanel === 'opDash'"
+          (click)="onSidebarSelect('opDash')"
+        >
+          <i class="pi pi-desktop" aria-hidden="true"></i>
+          <span>O/P Dashboard</span>
+        </button>
+      </nav>
 
-        @if (vehicleStates.length) {
-          <p-divider />
-          <div class="sidebar-meta">
-            <p class="field-label">Active missions</p>
-            <div class="fuel-status">
-              @for (state of vehicleStates; track state.planKey) {
-                <span class="fuel-item">
-                  {{ shapeLabel(state.shape) }}: {{ state.speed }} km/h · {{ state.fuelLiters }}L
-                </span>
+      <div class="aircraft-cards">
+        <p class="field-label">Aircraft status</p>
+        @for (aircraft of aircraftSlots; track aircraft.slot) {
+          <article
+            class="aircraft-card"
+            [class.aircraft-card--empty]="!aircraft.active"
+            [class.aircraft-card--selected]="aircraft.planKey && selectedPlanKey === aircraft.planKey"
+            [class.aircraft-card--clickable]="aircraft.active"
+            [attr.role]="aircraft.active ? 'button' : null"
+            [attr.tabindex]="aircraft.active ? 0 : -1"
+            [attr.aria-pressed]="aircraft.planKey && selectedPlanKey === aircraft.planKey"
+            (click)="onAircraftCardClick(aircraft)"
+            (keydown.enter)="onAircraftCardClick(aircraft)"
+            (keydown.space)="$event.preventDefault(); onAircraftCardClick(aircraft)"
+          >
+            <header class="aircraft-card__header">
+              <span class="aircraft-card__name">{{ aircraft.planeName }}</span>
+              @if (aircraft.shape) {
+                <span class="aircraft-card__badge">{{ shapeLabel(aircraft.shape) }}</span>
               }
-            </div>
-          </div>
+            </header>
+
+            @if (aircraft.active) {
+              <div class="aircraft-card__metrics">
+                <div class="aircraft-metric">
+                  <span class="aircraft-metric__label">Speed</span>
+                  <span class="aircraft-metric__value">{{ aircraft.speed }} km/h</span>
+                </div>
+                <div class="aircraft-metric">
+                  <span class="aircraft-metric__label">Fuel left</span>
+                  <span class="aircraft-metric__value">{{ aircraft.fuelLiters }} L</span>
+                </div>
+              </div>
+
+              <div class="aircraft-card__progress">
+                <div class="aircraft-card__progress-header">
+                  <span class="aircraft-card__progress-label">Route completed</span>
+                  <span class="aircraft-card__progress-value">{{ formatProgress(aircraft.progress) }}</span>
+                </div>
+                <div
+                  class="aircraft-progress-bar"
+                  role="progressbar"
+                  [attr.aria-valuenow]="aircraft.progress"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  [attr.aria-label]="'Route completed ' + formatProgress(aircraft.progress)"
+                >
+                  <div
+                    class="aircraft-progress-bar__fill"
+                    [style.width.%]="aircraft.progress"
+                  ></div>
+                </div>
+              </div>
+            } @else {
+              <p class="aircraft-card__empty">No plan assigned</p>
+            }
+          </article>
         }
-      </p-card>
+      </div>
     </aside>
 
-    <div class="map-time-header">
-      @if (selectedOpDashPlanStartingTime) {
-        <div class="map-plan-start">{{ selectedOpDashPlanStartingTime }}</div>
+    <div class="map-area">
+      <app-aerial-device-map
+        [routeSelectionEnabled]="routeSelectionActive && activePanel === 'plan' && savedPlans.length < maxPlans"
+        [deployEditingEnabled]="activePanel === 'deploy'"
+        [playbackMode]="playbackMode"
+        [highlightedPlanKey]="selectedPlanKey"
+        (waypointAdded)="onWaypointAdded($event)"
+        (simulationStateChange)="onSimulationStateChange($event)"
+        (simulationElapsedChange)="onSimulationElapsedChange($event)"
+        (simulationFinished)="onSimulationFinished()"
+      />
+
+      <div class="map-time-header">
+      @if (currentTime) {
+        <div class="map-current-time">{{ currentTime }}</div>
       }
-      <div class="map-current-time">{{ currentTime }}</div>
     </div>
 
     <div class="map-toolbar">
@@ -140,6 +184,7 @@
     @if (activePanel === 'plan') {
       <div class="map-overlay map-overlay--plan">
         <app-plan-panel
+          [visible]="true"
           [planForm]="planDraftForm"
           [routeSelectionActive]="routeSelectionActive"
           [draftWaypointCount]="draftWaypointCount"
@@ -148,6 +193,7 @@
           [plansCount]="savedPlans.length"
           [finishDisabled]="isFinishDisabled"
           [clearAllDisabled]="savedPlans.length === 0"
+          (visibleChange)="onPlanDialogVisibleChange($event)"
           (mapRouteClick)="onStartMapRoute()"
           (finishClick)="onFinishPlan()"
           (clearAllRoutesClick)="onClearAllRoutes()"
@@ -160,7 +206,6 @@
         <app-op-dash-panel
           [plans]="opDashPlans"
           [routeEvents]="opDashRouteEvents"
-          (planSelect)="onOpDashPlanSelect($event)"
         />
       </div>
     }
@@ -176,10 +221,6 @@
           class="timeline-slider"
           (ngModelChange)="onTimelineChange($event)"
         />
-        <div class="timeline-bounds">
-          <span class="timeline-bound timeline-bound--start">{{ timelineStartLabel }}</span>
-          <span class="timeline-bound timeline-bound--end">{{ timelineEndLabel }}</span>
-        </div>
       </div>
 
       <div class="timeline-zoom">
@@ -202,6 +243,7 @@
           <i class="pi pi-minus"></i>
         </button>
       </div>
+    </div>
     </div>
   </div>
 </section>
