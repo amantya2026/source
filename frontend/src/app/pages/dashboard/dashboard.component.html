@@ -1,0 +1,207 @@
+<section class="map-page">
+  <p-toast position="top-right" />
+
+  <div class="map-shell">
+    <app-aerial-device-map
+      [routeSelectionEnabled]="routeSelectionActive && activePanel === 'plan' && savedPlans.length < maxPlans"
+      [deployEditingEnabled]="activePanel === 'deploy'"
+      (waypointAdded)="onWaypointAdded($event)"
+      (simulationStateChange)="onSimulationStateChange($event)"
+      (simulationFinished)="onSimulationFinished()"
+      (missionTimeChange)="onMissionTimeChange($event)"
+    />
+
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <i class="pi pi-send sidebar-brand__icon" aria-hidden="true"></i>
+        <span class="sidebar-brand__title">Aerial Device Tracking</span>
+      </div>
+
+      <p-card styleClass="sidebar-card">
+        <div class="sidebar-modes">
+          <div class="mode-buttons">
+            <button
+              type="button"
+              class="mode-card"
+              [class.mode-card--active]="activePanel === 'plan'"
+              (click)="onSidebarSelect('plan')"
+            >
+              <i class="pi pi-map mode-card__icon" aria-hidden="true"></i>
+              <span class="mode-card__label">Plan</span>
+            </button>
+            <button
+              type="button"
+              class="mode-card"
+              [class.mode-card--active]="activePanel === 'deploy'"
+              (click)="onSidebarSelect('deploy')"
+            >
+              <i class="pi pi-send mode-card__icon" aria-hidden="true"></i>
+              <span class="mode-card__label">Deploy</span>
+            </button>
+            <button
+              type="button"
+              class="mode-card"
+              [class.mode-card--active]="activePanel === 'opDash'"
+              (click)="onSidebarSelect('opDash')"
+            >
+              <i class="pi pi-desktop mode-card__icon" aria-hidden="true"></i>
+              <span class="mode-card__label">O/P Dashboard</span>
+            </button>
+          </div>
+        </div>
+
+        @if (vehicleStates.length) {
+          <p-divider />
+          <div class="sidebar-meta">
+            <p class="field-label">Active missions</p>
+            <div class="fuel-status">
+              @for (state of vehicleStates; track state.planKey) {
+                <span class="fuel-item">
+                  {{ shapeLabel(state.shape) }}: {{ state.speed }} km/h · {{ state.fuelLiters }}L
+                </span>
+              }
+            </div>
+          </div>
+        }
+      </p-card>
+    </aside>
+
+    <div class="map-time-header">
+      @if (selectedOpDashPlanStartingTime) {
+        <div class="map-plan-start">{{ selectedOpDashPlanStartingTime }}</div>
+      }
+      <div class="map-current-time">{{ currentTime }}</div>
+    </div>
+
+    <div class="map-toolbar">
+      <div class="transport-controls">
+        <button
+          type="button"
+          class="map-toolbar-btn"
+          aria-label="Play"
+          [disabled]="!canPlaySimulation"
+          (click)="onPlay()"
+        >
+          <i class="pi pi-play"></i>
+        </button>
+        <button
+          type="button"
+          class="map-toolbar-btn"
+          aria-label="Pause"
+          [disabled]="!canPauseSimulation"
+          (click)="onPause()"
+        >
+          <i class="pi pi-pause"></i>
+        </button>
+        <button
+          type="button"
+          class="map-toolbar-btn"
+          aria-label="Resume"
+          [disabled]="!canResumeSimulation"
+          (click)="onResume()"
+        >
+          <i class="pi pi-play-circle"></i>
+        </button>
+        <button
+          type="button"
+          class="map-toolbar-btn"
+          aria-label="Stop"
+          [disabled]="!canStopSimulation"
+          (click)="onStop()"
+        >
+          <i class="pi pi-stop"></i>
+        </button>
+      </div>
+
+      <div class="mode-controls">
+        <label class="mode-option">
+          <p-radiobutton
+            name="playbackMode"
+            value="event"
+            size="large"
+            [(ngModel)]="playbackMode"
+            inputId="mode-event"
+          />
+          <span>Event based tracking</span>
+        </label>
+        <label class="mode-option">
+          <p-radiobutton
+            name="playbackMode"
+            value="time"
+            size="large"
+            [(ngModel)]="playbackMode"
+            inputId="mode-time"
+          />
+          <span>Time based tracking</span>
+        </label>
+      </div>
+    </div>
+
+    @if (activePanel === 'plan') {
+      <div class="map-overlay map-overlay--plan">
+        <app-plan-panel
+          [planForm]="planDraftForm"
+          [routeSelectionActive]="routeSelectionActive"
+          [draftWaypointCount]="draftWaypointCount"
+          [savedPlanKeys]="savedPlanKeys"
+          [maxPlans]="maxPlans"
+          [plansCount]="savedPlans.length"
+          [finishDisabled]="isFinishDisabled"
+          [clearAllDisabled]="savedPlans.length === 0"
+          (mapRouteClick)="onStartMapRoute()"
+          (finishClick)="onFinishPlan()"
+          (clearAllRoutesClick)="onClearAllRoutes()"
+        />
+      </div>
+    }
+
+    @if (activePanel === 'opDash') {
+      <div class="map-overlay map-overlay--op-dash">
+        <app-op-dash-panel
+          [plans]="opDashPlans"
+          [routeEvents]="opDashRouteEvents"
+          (planSelect)="onOpDashPlanSelect($event)"
+        />
+      </div>
+    }
+
+    <div class="map-toolbar map-toolbar--bottom">
+      <div class="timeline-track">
+        <p-slider
+          [(ngModel)]="timelineValue"
+          [min]="0"
+          [max]="100"
+          [step]="1"
+          [disabled]="!isTimelineInteractive"
+          class="timeline-slider"
+          (ngModelChange)="onTimelineChange($event)"
+        />
+        <div class="timeline-bounds">
+          <span class="timeline-bound timeline-bound--start">{{ timelineStartLabel }}</span>
+          <span class="timeline-bound timeline-bound--end">{{ timelineEndLabel }}</span>
+        </div>
+      </div>
+
+      <div class="timeline-zoom">
+        <button
+          type="button"
+          class="map-toolbar-btn"
+          aria-label="Zoom in"
+          [disabled]="!isTimelineInteractive"
+          (click)="zoomTimeline(5)"
+        >
+          <i class="pi pi-plus"></i>
+        </button>
+        <button
+          type="button"
+          class="map-toolbar-btn"
+          aria-label="Zoom out"
+          [disabled]="!isTimelineInteractive"
+          (click)="zoomTimeline(-5)"
+        >
+          <i class="pi pi-minus"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>

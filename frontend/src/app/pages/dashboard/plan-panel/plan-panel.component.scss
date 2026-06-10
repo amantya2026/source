@@ -1,0 +1,76 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.plan-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-border-radius-md);
+  background: var(--p-surface-0);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
+}
+
+.plan-panel__title {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--p-text-color);
+}
+
+.plan-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+
+  label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--p-text-muted-color);
+  }
+
+  :host ::ng-deep .p-datepicker,
+  :host ::ng-deep .p-inputtext,
+  :host ::ng-deep .p-button {
+    width: 100%;
+  }
+}
+
+.plan-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: #34d399;
+  line-height: 1.3;
+}
+
+.plan-saved {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--p-text-color);
+  line-height: 1.3;
+}
+
+.plan-limit {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color);
+  line-height: 1.3;
+}
+
+.plan-form {
+  display: flex;
+  flex-direction: column;
+}
+
+:host ::ng-deep .plan-finish-btn {
+  width: 100%;
+}
+
+:host ::ng-deep .plan-clear-btn {
+  width: 100%;
+  margin-top: 0.5rem;
+}
