@@ -1,7 +1,9 @@
 import LineString from 'ol/geom/LineString';
+import { fromLonLat } from 'ol/proj';
 import { getLength } from 'ol/sphere';
+import type { RouteEvent } from '../models/plan.model';
 
-export function computeEventProgresses(line: LineString): number[] {
+function computeWaypointEventProgresses(line: LineString): number[] {
   const coordinates = line.getCoordinates();
   const totalLength = getLength(line);
 
@@ -18,6 +20,62 @@ export function computeEventProgresses(line: LineString): number[] {
   }
 
   return progresses;
+}
+
+export function progressAlongLine(
+  line: LineString,
+  longitude: number,
+  latitude: number
+): number {
+  const totalLength = getLength(line);
+  if (totalLength === 0) {
+    return 0;
+  }
+
+  const target = fromLonLat([longitude, latitude]);
+  const closest = line.getClosestPoint(target);
+  const coordinates = line.getCoordinates();
+  let traversed = 0;
+
+  for (let index = 0; index < coordinates.length - 1; index++) {
+    const segment = new LineString([coordinates[index], coordinates[index + 1]]);
+    const segmentLength = getLength(segment);
+    const closestOnSegment = segment.getClosestPoint(closest);
+    const distanceToClosestOnSegment = getLength(
+      new LineString([closestOnSegment, closest])
+    );
+
+    if (distanceToClosestOnSegment < 1) {
+      const alongSegment = getLength(new LineString([coordinates[index], closestOnSegment]));
+      return Math.min(1, Math.max(0, (traversed + alongSegment) / totalLength));
+    }
+
+    traversed += segmentLength;
+  }
+
+  return 1;
+}
+
+export function computeEventProgresses(
+  line: LineString,
+  routeEvents: RouteEvent[] = [],
+  planKey?: string
+): number[] {
+  const steps = new Set<number>([0, 1]);
+
+  for (const progress of computeWaypointEventProgresses(line)) {
+    steps.add(progress);
+  }
+
+  if (planKey) {
+    for (const event of routeEvents) {
+      if (event.planKeys.includes(planKey)) {
+        steps.add(progressAlongLine(line, event.longitude, event.latitude));
+      }
+    }
+  }
+
+  return [...steps].sort((left, right) => left - right);
 }
 
 export function snapToPreviousEventProgress(
@@ -61,6 +119,21 @@ export function snapToNearestEventProgress(
   }
 
   return nearest;
+}
+
+export function progressFromElapsed(
+  line: LineString,
+  speedKmh: number,
+  elapsedMs: number
+): number {
+  const lineLength = getLength(line);
+  if (lineLength <= 0) {
+    return 0;
+  }
+
+  const speedMs = (Math.max(speedKmh, 1) * 1000) / 3600;
+  const distanceTraveled = speedMs * (elapsedMs / 1000);
+  return Math.min(1, distanceTraveled / lineLength);
 }
 
 export function mergeEventProgressSteps(eventProgressLists: number[][]): number[] {

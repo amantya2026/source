@@ -4,6 +4,7 @@ import { fromLonLat, toLonLat } from 'ol/proj';
 import { getPointResolution } from 'ol/proj';
 import { getDistance } from 'ol/sphere';
 import type { DeployArea } from '../models/deploy-area.model';
+import { sampleClosedBezierRing } from './bezier-curve.util';
 
 const ELLIPSE_SEGMENTS = 64;
 
@@ -78,6 +79,10 @@ export function ellipsePointAtAngle(
   ];
 }
 
+export function ellipseAnchorAngle(vertexIndex: number, vertexCount: number): number {
+  return (vertexIndex / vertexCount) * Math.PI * 2 - Math.PI / 2;
+}
+
 export function ellipseRadiiFromAnchorPoint(
   center: Coordinate,
   cursor: Coordinate,
@@ -121,7 +126,7 @@ export function sampleEllipseVertices(
   const vertices: [number, number][] = [];
 
   for (let index = 0; index < count; index++) {
-    const angle = (index / count) * Math.PI * 2 - Math.PI / 2;
+    const angle = ellipseAnchorAngle(index, count);
     const point = ellipsePointAtAngle(center, area.radiusX, area.radiusY, area.rotation, angle);
     vertices.push(toLonLat(point) as [number, number]);
   }
@@ -131,9 +136,11 @@ export function sampleEllipseVertices(
 
 export function createDeployAreaPolygon(area: DeployArea): Polygon {
   if (area.vertices && area.vertices.length >= 3) {
-    const ring = area.vertices.map((vertex) => fromLonLat(vertex));
-    ring.push(ring[0]);
-    return new Polygon([ring]);
+    const ring = sampleClosedBezierRing(area.vertices);
+    if (ring.length >= 3) {
+      ring.push(ring[0]);
+      return new Polygon([ring]);
+    }
   }
 
   const center = fromLonLat([area.longitude, area.latitude]);

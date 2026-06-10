@@ -11,10 +11,21 @@
   overflow: hidden;
 }
 
+$sidebar-width: 17rem;
+
 .map-shell {
-  position: relative;
+  display: flex;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+}
+
+.map-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
 
   app-aerial-device-map {
     position: absolute;
@@ -27,17 +38,18 @@
 }
 
 .sidebar {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 5;
+  flex: 0 0 $sidebar-width;
+  width: $sidebar-width;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  width: min(17rem, calc(100vw - 1.5rem));
-  height: calc(100vh - 1.5rem);
-  max-height: calc(100vh - 1.5rem);
-  pointer-events: auto;
+  padding: 0.75rem;
+  background: var(--p-surface-0);
+  border-right: 1px solid var(--p-content-border-color);
+  box-shadow: 2px 0 12px rgba(15, 23, 42, 0.06);
+  z-index: 5;
+  overflow: hidden;
 
   .sidebar-brand {
     display: flex;
@@ -47,9 +59,7 @@
     font-weight: 700;
     color: var(--p-primary-color);
     border-radius: var(--p-border-radius-md);
-    background: color-mix(in srgb, var(--p-surface-0) 92%, transparent);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.1);
+    background: var(--p-surface-50);
   }
 
   .sidebar-brand__icon {
@@ -68,107 +78,202 @@
     font-size: 0.875rem;
   }
 
-  .sidebar-modes {
+  .sidebar-nav {
     display: flex;
-    flex: 1;
     flex-direction: column;
-    align-items: center;
-    justify-content: stretch;
-    min-height: 0;
-    height: 100%;
-  }
-
-  .mode-buttons {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-  }
-
-  .mode-card {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
     gap: 0.45rem;
     width: 100%;
-    min-height: 0;
-    padding: 1rem 0.65rem;
-    border: 1px solid #34d399;
-    border-radius: var(--p-border-radius-lg);
+  }
+
+  .sidebar-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--p-content-border-color);
+    border-radius: var(--p-border-radius-md);
     background: var(--p-surface-0);
-    color: #34d399;
+    color: var(--p-text-color);
     cursor: pointer;
     font-family: inherit;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: left;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
-    &:hover:not(.mode-card--active) {
+    i {
+      font-size: 1rem;
+      color: #34d399;
+    }
+
+    &:hover:not(.sidebar-nav-btn--active) {
       background: rgba(52, 211, 153, 0.08);
-      box-shadow: 0 4px 12px rgba(52, 211, 153, 0.15);
+      border-color: #34d399;
     }
 
     &--active {
       background: #34d399;
       border-color: #34d399;
       color: #ffffff;
-      box-shadow: 0 4px 14px rgba(52, 211, 153, 0.35);
+
+      i {
+        color: #ffffff;
+      }
     }
   }
 
-  .mode-card__icon {
-    font-size: 1.5rem;
-    line-height: 1;
+  .aircraft-cards {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    margin-top: 0.65rem;
+    overflow-y: auto;
   }
 
-  .mode-card__label {
-    font-size: 0.82rem;
-    font-weight: 600;
+  .aircraft-card {
+    padding: 0.75rem;
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 0.65rem;
+    background: var(--p-surface-0);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+
+    &--empty {
+      opacity: 0.65;
+    }
+
+    &--clickable {
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+
+      &:hover {
+        border-color: #34d399;
+        box-shadow: 0 4px 12px rgba(52, 211, 153, 0.15);
+      }
+
+      &:focus-visible {
+        outline: 2px solid #34d399;
+        outline-offset: 2px;
+      }
+    }
+
+    &--selected {
+      border-color: #34d399;
+      box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.25), 0 4px 14px rgba(52, 211, 153, 0.2);
+    }
+  }
+
+  .aircraft-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .aircraft-card__name {
+    font-size: 0.88rem;
+    font-weight: 700;
     line-height: 1.2;
-    text-align: center;
+    color: var(--p-text-color);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .sidebar-meta {
-    margin-top: auto;
+  .aircraft-card__badge {
+    flex-shrink: 0;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.35rem;
+    background: rgba(52, 211, 153, 0.15);
+    color: #059669;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
   }
 
-  .fuel-status {
+  .aircraft-card__metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .aircraft-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.5rem 0.55rem;
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 0.45rem;
+    background: var(--p-surface-50);
+  }
+
+  .aircraft-metric__label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--p-text-muted-color);
+  }
+
+  .aircraft-metric__value {
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--p-text-color);
+  }
+
+  .aircraft-card__progress {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
   }
 
-  .fuel-item {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #34d399;
-    line-height: 1.35;
+  .aircraft-card__progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
   }
 
-}
+  .aircraft-card__progress-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--p-text-muted-color);
+  }
 
-:host ::ng-deep .sidebar-card {
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: color-mix(in srgb, var(--p-surface-0) 94%, transparent);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.12);
-}
+  .aircraft-card__progress-value {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--p-text-color);
+  }
 
-:host ::ng-deep .sidebar-card .p-card-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
+  .aircraft-progress-bar {
+    height: 0.45rem;
+    border-radius: 999px;
+    background: #e5e7eb;
+    overflow: hidden;
+  }
+
+  .aircraft-progress-bar__fill {
+    height: 100%;
+    border-radius: 999px;
+    background: #34d399;
+    transition: width 0.25s ease;
+  }
+
+  .aircraft-card__empty {
+    margin: 0;
+    font-size: 0.78rem;
+    font-style: italic;
+    color: var(--p-text-muted-color);
+  }
 }
 
 .map-time-header {
@@ -215,17 +320,20 @@
 }
 
 .map-overlay--plan {
-  top: 5.25rem;
-  left: calc(min(17rem, calc(100vw - 1.5rem)) + 1.25rem);
-  width: 15.5rem;
+  top: 0.75rem;
+  left: 0.75rem;
+  width: min(32rem, calc(100% - 1.5rem));
+  max-height: calc(100% - 1.5rem);
+  overflow: visible;
 }
 
 .map-overlay--op-dash {
-  right: 0.75rem;
+  left: 0.75rem;
+  right: auto;
   bottom: 5.25rem;
   width: min(22rem, calc(100% - 1.5rem));
   max-height: calc(100% - 7rem);
-  overflow: auto;
+  overflow: visible;
 }
 
 .map-overlay app-plan-panel,
@@ -257,7 +365,7 @@
 .map-toolbar--bottom {
   bottom: 0.85rem;
   width: min(90rem, calc(100% - 2rem));
-  left: 55%;
+  left: 50%;
 }
 
 .transport-controls {
@@ -315,34 +423,6 @@
   flex: 1;
   min-width: 8rem;
   padding: 0 0.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.timeline-bounds {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0 0.15rem;
-}
-
-.timeline-bound {
-  font-size: 0.72rem;
-  font-weight: 500;
-  line-height: 1.3;
-  color: var(--p-text-muted-color, #64748b);
-  max-width: 45%;
-}
-
-.timeline-bound--start {
-  text-align: left;
-}
-
-.timeline-bound--end {
-  text-align: right;
-  margin-left: auto;
 }
 
 $theme-green: #34d399;
@@ -405,43 +485,45 @@ $theme-green: #34d399;
 }
 
 @media (max-width: 900px) {
+  .map-shell {
+    flex-direction: column;
+  }
+
   .sidebar {
-    top: 0.5rem;
-    left: 0.5rem;
-    right: 0.5rem;
-    width: auto;
-    height: auto;
-    max-height: none;
-  }
-
-  :host ::ng-deep .sidebar-card {
-    flex: none;
-    height: auto;
-  }
-
-  :host ::ng-deep .sidebar-card .p-card-body,
-  :host ::ng-deep .sidebar-card .p-card-content {
-    height: auto;
-  }
-
-  .sidebar-modes {
-    flex: none;
-    height: auto;
-    min-height: auto;
-    padding: 0.5rem 0;
-  }
-
-  .mode-buttons {
-    flex: none;
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
     width: 100%;
     height: auto;
+    padding: 0.5rem;
+    border-right: none;
+    border-bottom: 1px solid var(--p-content-border-color);
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+  }
 
-    .mode-card {
-      flex: 1 1 calc(33% - 0.5rem);
-      min-width: 5.5rem;
+  .sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .sidebar-nav-btn {
+    flex: 1 1 calc(33% - 0.35rem);
+    min-width: 5.5rem;
+    justify-content: center;
+    padding: 0.5rem 0.45rem;
+
+    span {
+      font-size: 0.78rem;
     }
+  }
+
+  .aircraft-cards {
+    flex: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .map-area {
+    flex: 1;
+    min-height: 0;
   }
 
   .map-overlay--plan {
@@ -449,6 +531,12 @@ $theme-green: #34d399;
     bottom: 6rem;
     left: 0.5rem;
     width: min(15.5rem, calc(100% - 1rem));
+  }
+
+  .map-overlay--op-dash {
+    left: 0.5rem;
+    right: 0.5rem;
+    width: min(22rem, calc(100% - 1rem));
   }
 
   .map-toolbar {
@@ -464,6 +552,9 @@ $theme-green: #34d399;
 
   .map-toolbar--bottom {
     bottom: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    width: auto;
   }
 
   .mode-controls {

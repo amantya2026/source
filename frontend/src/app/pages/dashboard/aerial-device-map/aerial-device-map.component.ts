@@ -35,7 +35,6 @@ import type { MapBrowserEvent } from 'ol';
 import { DeployEditAction, DeployArea } from '../../../models/deploy-area.model';
 import {
   FUEL_CAPACITY_LITERS,
-  FUEL_CONSUMPTION_L_PER_MIN,
   MarkerShape,
   PlanSimulationConfig,
   RouteEvent,
@@ -51,12 +50,9 @@ import {
 } from '../../../utils/ellipse.util';
 import { fuelRemainingForDistance } from '../../../utils/plan-fuel.util';
 import {
-  missionTimeFromSliderValue,
-  vehicleStateAtMissionTime,
-} from '../../../utils/plan-timeline.util';
-import {
   computeEventProgresses,
   mergeEventProgressSteps,
+  progressFromElapsed,
   snapToNearestEventProgress,
   snapToPreviousEventProgress,
 } from '../../../utils/simulation-event.util';
@@ -71,7 +67,6 @@ interface VehicleRuntime {
   planKey: string;
   shape: MarkerShape;
   speedKmh: number;
-  startingDate: Date;
   line: LineString;
   progress: number;
   fuelLiters: number;
@@ -111,10 +106,12 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
   @Input() routeSelectionEnabled = false;
   @Input() deployEditingEnabled = false;
+  @Input() playbackMode: 'event' | 'time' = 'event';
+  @Input() highlightedPlanKey: string | null = null;
   @Output() waypointAdded = new EventEmitter<WaypointAddedEvent>();
   @Output() simulationStateChange = new EventEmitter<VehicleSimulationState[]>();
+  @Output() simulationElapsedChange = new EventEmitter<number>();
   @Output() simulationFinished = new EventEmitter<void>();
-  @Output() missionTimeChange = new EventEmitter<number>();
 
   deployCardVisible = false;
   deployMapHint = 'Click on the map to place or select a deploy area';
@@ -158,13 +155,11 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   private deployClickKey?: EventsKey;
   private deployDomCleanup: (() => void)[] = [];
   private vehicles: VehicleRuntime[] = [];
+  private routeEvents: RouteEvent[] = [];
   private animationFrame?: number;
   private lastFrameTime?: number;
   private simulationRunning = false;
-  private timelineStartMs: number | null = null;
-  private timelineEndMs: number | null = null;
-  private missionTimeMs: number | null = null;
-  private activePlaybackMode: 'time' | 'event' = 'event';
+  private simulationElapsedMs = 0;
 
   constructor(
     private readonly ngZone: NgZone,
@@ -216,6 +211,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   }
 
   setRouteEvents(events: RouteEvent[]): void {
+    this.routeEvents = events;
     this.routeEventSource.clear();
 
     for (const event of events) {
@@ -227,6 +223,8 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
         })
       );
     }
+
+    this.refreshVehicleEventProgresses();
   }
 
   clearDeploySelection(): void {
@@ -275,12 +273,12 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
   onDeployReshape(): void {
     this.activeDeployAction = 'reshape';
-    this.deployMapHint = 'Drag the points to reshape the area';
+    this.deployMapHint = 'Drag control points to reshape the Bezier curve';
 
     if (this.selectedDeployAreaId) {
       const area = this.deployAreas.get(this.selectedDeployAreaId);
       if (area) {
-        this.ensureReshapeVertices(area);
+        this.ensureBezierControlPoints(area);
         this.updateDeployAreaFeature(area);
         this.updateReshapeHandles(area);
       }
@@ -317,13 +315,12 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       planKey: plan.planKey,
       shape: plan.shape,
       speedKmh,
-      startingDate: plan.startingDate,
       line,
       progress: 0,
       fuelLiters: FUEL_CAPACITY_LITERS,
       finished: false,
       feature,
-      eventProgresses: computeEventProgresses(line),
+      eventProgresses: computeEventProgresses(line, this.routeEvents, plan.planKey),
     });
 
     if (autoStart) {
@@ -333,23 +330,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     this.emitSimulationState();
   }
 
-  setTimelineBounds(start: Date | null, end: Date | null): void {
-    this.timelineStartMs = start?.getTime() ?? null;
-    this.timelineEndMs = end?.getTime() ?? null;
-    this.missionTimeMs = this.timelineStartMs;
-  }
-
-  startSimulation(mode: 'time' | 'event' = 'event'): void {
-    this.activePlaybackMode = mode;
-
-    if (mode === 'time' && this.timelineStartMs != null && this.timelineEndMs != null) {
-      if (this.missionTimeMs == null) {
-        this.missionTimeMs = this.timelineStartMs;
-      }
-      this.beginTimeBasedLoop();
-      return;
-    }
-
+  startSimulation(): void {
     this.beginSimulationLoop();
   }
 
@@ -387,6 +368,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
   resetSimulation(): void {
     this.pauseSimulation(false);
+    this.simulationElapsedMs = 0;
 
     for (const vehicle of this.vehicles) {
       vehicle.progress = 0;
@@ -395,12 +377,12 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       this.syncVehicleToProgress(vehicle);
     }
 
-    this.missionTimeMs = this.timelineStartMs;
     this.vehicleSource.changed();
     this.emitSimulationState();
-    if (this.missionTimeMs != null) {
-      this.missionTimeChange.emit(this.missionTimeMs);
-    }
+  }
+
+  getSimulationElapsedMs(): number {
+    return this.simulationElapsedMs;
   }
 
   getTimelineEventSteps(): number[] {
@@ -414,20 +396,6 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       return;
     }
 
-    if (
-      mode === 'time' &&
-      this.timelineStartMs != null &&
-      this.timelineEndMs != null
-    ) {
-      const missionTime = missionTimeFromSliderValue(
-        sliderValue,
-        new Date(this.timelineStartMs),
-        new Date(this.timelineEndMs)
-      );
-      this.applyMissionTime(missionTime.getTime());
-      return;
-    }
-
     let targetProgress = Math.min(1, Math.max(0, sliderValue / 100));
 
     if (mode === 'event') {
@@ -437,28 +405,31 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       targetProgress = snapToNearestEventProgress(targetProgress, eventProgresses);
     }
 
+    this.simulationElapsedMs = this.elapsedMsForProgress(targetProgress);
+
     for (const vehicle of this.vehicles) {
-      vehicle.progress = targetProgress;
+      const elapsedTarget = progressFromElapsed(
+        vehicle.line,
+        vehicle.speedKmh,
+        this.simulationElapsedMs
+      );
+      const vehicleProgress =
+        mode === 'event'
+          ? snapToPreviousEventProgress(elapsedTarget, vehicle.eventProgresses)
+          : elapsedTarget;
+
+      vehicle.progress = vehicleProgress;
       this.syncVehicleToProgress(vehicle);
-      vehicle.finished = targetProgress >= 1 - 1e-9 || vehicle.fuelLiters <= 0;
+      vehicle.finished = vehicleProgress >= 1 - 1e-9 || vehicle.fuelLiters <= 0;
     }
 
     this.vehicleSource.changed();
     this.emitSimulationState();
-
-    if (this.timelineStartMs != null && this.timelineEndMs != null) {
-      const missionTime = missionTimeFromSliderValue(
-        sliderValue,
-        new Date(this.timelineStartMs),
-        new Date(this.timelineEndMs)
-      );
-      this.missionTimeMs = missionTime.getTime();
-      this.missionTimeChange.emit(this.missionTimeMs);
-    }
   }
 
   stopSimulation(clearMarkers = true): void {
     this.pauseSimulation();
+    this.simulationElapsedMs = 0;
     if (clearMarkers) {
       this.vehicleSource.clear();
       this.vehicles = [];
@@ -517,6 +488,15 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
       this.setMapPanEnabled(!this.deployEditingEnabled);
     }
+
+    if (changes['playbackMode'] && !changes['playbackMode'].firstChange) {
+      this.applyPlaybackModeToVehicles();
+    }
+
+    if (changes['highlightedPlanKey']) {
+      this.routeLayer.changed();
+      this.vehicleLayer.changed();
+    }
   }
 
   ngOnDestroy(): void {
@@ -526,70 +506,6 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     this.setMapPanEnabled(true);
     this.map?.setTarget(undefined);
     this.map?.dispose();
-  }
-
-  private beginTimeBasedLoop(): void {
-    if (
-      this.simulationRunning ||
-      this.vehicles.length === 0 ||
-      this.timelineStartMs == null ||
-      this.timelineEndMs == null
-    ) {
-      return;
-    }
-
-    this.simulationRunning = true;
-    this.lastFrameTime = performance.now();
-    this.ngZone.runOutsideAngular(() => this.animateTimeBased());
-  }
-
-  private animateTimeBased = (): void => {
-    if (!this.simulationRunning || this.timelineEndMs == null) {
-      return;
-    }
-
-    const now = performance.now();
-    const deltaMs = now - (this.lastFrameTime ?? now);
-    this.lastFrameTime = now;
-
-    const nextMissionTime = Math.min(
-      this.timelineEndMs,
-      (this.missionTimeMs ?? this.timelineStartMs ?? 0) + deltaMs
-    );
-    this.applyMissionTime(nextMissionTime);
-
-    if (nextMissionTime >= this.timelineEndMs) {
-      this.simulationRunning = false;
-      this.ngZone.run(() => this.simulationFinished.emit());
-      return;
-    }
-
-    this.animationFrame = requestAnimationFrame(this.animateTimeBased);
-  };
-
-  private applyMissionTime(missionTimeMs: number): void {
-    this.missionTimeMs = missionTimeMs;
-    const missionTime = new Date(missionTimeMs);
-
-    for (const vehicle of this.vehicles) {
-      const lineLength = getLength(vehicle.line);
-      const state = vehicleStateAtMissionTime(
-        vehicle.startingDate,
-        vehicle.speedKmh,
-        lineLength,
-        missionTime
-      );
-      vehicle.progress = state.progress;
-      vehicle.fuelLiters = state.fuelLiters;
-      vehicle.finished = state.finished;
-      this.syncVehicleToProgress(vehicle, false);
-    }
-
-    this.vehicleSource.changed();
-    this.ngZone.run(() => {
-      this.emitSimulationState();
-      this.missionTimeChange.emit(missionTimeMs);
-    });
   }
 
   private beginSimulationLoop(): void {
@@ -612,32 +528,12 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     const now = performance.now();
     const deltaMs = now - (this.lastFrameTime ?? now);
     this.lastFrameTime = now;
-    const deltaMinutes = deltaMs / 60000;
+    this.simulationElapsedMs += deltaMs;
 
-    for (const vehicle of this.vehicles) {
-      if (vehicle.finished) continue;
-
-      vehicle.fuelLiters = Math.max(
-        0,
-        vehicle.fuelLiters - FUEL_CONSUMPTION_L_PER_MIN * deltaMinutes
-      );
-
-      if (vehicle.fuelLiters <= 0) {
-        vehicle.finished = true;
-        continue;
-      }
-
-      const lineLength = getLength(vehicle.line);
-      const speedMs = (vehicle.speedKmh * 1000) / 3600;
-      const progressDelta = lineLength > 0 ? (speedMs * (deltaMs / 1000)) / lineLength : 0;
-      vehicle.progress = Math.min(1, vehicle.progress + progressDelta);
-
-      const coordinate = vehicle.line.getCoordinateAt(vehicle.progress);
-      (vehicle.feature.getGeometry() as Point).setCoordinates(coordinate);
-
-      if (vehicle.progress >= 1) {
-        vehicle.finished = true;
-      }
+    if (this.playbackMode === 'event') {
+      this.animateEventBased();
+    } else {
+      this.animateTimeBased();
     }
 
     this.vehicleSource.changed();
@@ -652,6 +548,52 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     this.animationFrame = requestAnimationFrame(this.animate);
   };
 
+  private animateTimeBased(): void {
+    for (const vehicle of this.vehicles) {
+      if (vehicle.finished) continue;
+
+      const targetProgress = progressFromElapsed(
+        vehicle.line,
+        vehicle.speedKmh,
+        this.simulationElapsedMs
+      );
+
+      vehicle.progress = targetProgress;
+      this.syncVehicleToProgress(vehicle);
+
+      if (vehicle.fuelLiters <= 0 || vehicle.progress >= 1 - 1e-9) {
+        vehicle.finished = true;
+      }
+    }
+  }
+
+  private animateEventBased(): void {
+    for (const vehicle of this.vehicles) {
+      if (vehicle.finished) continue;
+
+      const targetProgress = progressFromElapsed(
+        vehicle.line,
+        vehicle.speedKmh,
+        this.simulationElapsedMs
+      );
+      const nextProgress = snapToPreviousEventProgress(
+        targetProgress,
+        vehicle.eventProgresses
+      );
+
+      if (Math.abs(nextProgress - vehicle.progress) < 1e-9) {
+        continue;
+      }
+
+      vehicle.progress = nextProgress;
+      this.syncVehicleToProgress(vehicle);
+
+      if (vehicle.fuelLiters <= 0 || vehicle.progress >= 1 - 1e-9) {
+        vehicle.finished = true;
+      }
+    }
+  }
+
   private emitSimulationState(): void {
     this.simulationStateChange.emit(
       this.vehicles.map((vehicle) => ({
@@ -662,15 +604,68 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
         progress: Math.round(vehicle.progress * 1000) / 10,
       }))
     );
+    this.simulationElapsedChange.emit(this.simulationElapsedMs);
   }
 
-  private syncVehicleToProgress(vehicle: VehicleRuntime, updateFuelFromDistance = true): void {
-    const coordinate = vehicle.line.getCoordinateAt(vehicle.progress);
-    (vehicle.feature.getGeometry() as Point).setCoordinates(coordinate);
+  private getMaxSimulationDurationMs(): number {
+    let maxDuration = 0;
 
-    if (!updateFuelFromDistance) {
+    for (const vehicle of this.vehicles) {
+      const lineLength = getLength(vehicle.line);
+      const speedMs = (vehicle.speedKmh * 1000) / 3600;
+      if (lineLength > 0 && speedMs > 0) {
+        maxDuration = Math.max(maxDuration, (lineLength / speedMs) * 1000);
+      }
+    }
+
+    return maxDuration;
+  }
+
+  private elapsedMsForProgress(progress: number): number {
+    return progress * this.getMaxSimulationDurationMs();
+  }
+
+  private refreshVehicleEventProgresses(): void {
+    for (const vehicle of this.vehicles) {
+      vehicle.eventProgresses = computeEventProgresses(
+        vehicle.line,
+        this.routeEvents,
+        vehicle.planKey
+      );
+    }
+  }
+
+  private applyPlaybackModeToVehicles(): void {
+    if (this.vehicles.length === 0) {
       return;
     }
+
+    for (const vehicle of this.vehicles) {
+      if (vehicle.finished) {
+        continue;
+      }
+
+      const elapsedProgress = progressFromElapsed(
+        vehicle.line,
+        vehicle.speedKmh,
+        this.simulationElapsedMs
+      );
+
+      vehicle.progress =
+        this.playbackMode === 'event'
+          ? snapToPreviousEventProgress(elapsedProgress, vehicle.eventProgresses)
+          : elapsedProgress;
+
+      this.syncVehicleToProgress(vehicle);
+    }
+
+    this.vehicleSource.changed();
+    this.ngZone.run(() => this.emitSimulationState());
+  }
+
+  private syncVehicleToProgress(vehicle: VehicleRuntime): void {
+    const coordinate = vehicle.line.getCoordinateAt(vehicle.progress);
+    (vehicle.feature.getGeometry() as Point).setCoordinates(coordinate);
 
     const lineLength = getLength(vehicle.line);
     const distanceTraveled = lineLength * vehicle.progress;
@@ -920,6 +915,11 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
       area.vertices = cloneDeployVertices(areaSnapshot.vertices);
       area.vertices[vertexIndex] = toLonLat(current) as [number, number];
+      area.longitude = areaSnapshot.longitude;
+      area.latitude = areaSnapshot.latitude;
+      area.radiusX = areaSnapshot.radiusX;
+      area.radiusY = areaSnapshot.radiusY;
+      area.rotation = areaSnapshot.rotation;
       this.updateReshapeHandles(area);
     }
 
@@ -969,15 +969,6 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     this.deployAreaSource.changed();
   }
 
-  private ensureReshapeVertices(area: DeployArea): [number, number][] {
-    if (area.vertices && area.vertices.length >= 3) {
-      return area.vertices;
-    }
-
-    area.vertices = sampleEllipseVertices(area, RESHAPE_VERTEX_COUNT);
-    return area.vertices;
-  }
-
   private cloneAreaSnapshot(area: DeployArea): DeployArea {
     return {
       ...area,
@@ -985,13 +976,20 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     };
   }
 
-  private updateReshapeHandles(area: DeployArea): void {
-    if (!area.vertices?.length) {
-      return;
+  private ensureBezierControlPoints(area: DeployArea): void {
+    if (!area.vertices || area.vertices.length < RESHAPE_VERTEX_COUNT) {
+      area.vertices = sampleEllipseVertices(area, RESHAPE_VERTEX_COUNT);
     }
+  }
 
-    for (let index = 0; index < area.vertices.length; index++) {
-      const coordinate = fromLonLat(area.vertices[index]);
+  private updateReshapeHandles(area: DeployArea): void {
+    const handlePositions =
+      area.vertices && area.vertices.length >= 3
+        ? area.vertices
+        : sampleEllipseVertices(area, RESHAPE_VERTEX_COUNT);
+
+    for (let index = 0; index < handlePositions.length; index++) {
+      const coordinate = fromLonLat(handlePositions[index]);
       let feature = this.reshapeHandleFeatures.get(index);
 
       if (!feature) {
@@ -1008,7 +1006,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     }
 
     for (const [index, feature] of this.reshapeHandleFeatures) {
-      if (index >= area.vertices.length) {
+      if (index >= handlePositions.length) {
         this.deployAreaSource.removeFeature(feature);
         this.reshapeHandleFeatures.delete(index);
       }
@@ -1151,31 +1149,62 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     });
   }
 
-  private styleRouteFeature(feature: FeatureLike): Style {
+  private styleRouteFeature(feature: FeatureLike): Style | Style[] {
     if (!(feature instanceof Feature)) {
       return new Style();
     }
 
     const kind = feature.get('kind');
     const color = feature.get('color') as string;
+    const planKey = feature.get('planKey') as string;
+    const isDraft = feature.get('isDraft') === true;
+    const isHighlighted =
+      !isDraft && !!this.highlightedPlanKey && planKey === this.highlightedPlanKey;
+    const isDimmed =
+      !isDraft && !!this.highlightedPlanKey && planKey !== this.highlightedPlanKey;
 
     if (kind === 'route') {
+      const strokeColor = isDimmed ? this.withAlpha(color, 0.28) : color;
+      const width = isHighlighted ? 6 : isDimmed ? 2 : 3;
+
+      if (isHighlighted) {
+        return [
+          new Style({
+            stroke: new Stroke({
+              color: 'rgba(255, 255, 255, 0.85)',
+              width: 10,
+            }),
+          }),
+          new Style({
+            stroke: new Stroke({
+              color: strokeColor,
+              width,
+            }),
+          }),
+        ];
+      }
+
       return new Style({
         stroke: new Stroke({
-          color,
-          width: 3,
-          lineDash: feature.get('isDraft') ? [8, 8] : undefined,
+          color: strokeColor,
+          width,
+          lineDash: isDraft ? [8, 8] : undefined,
         }),
       });
     }
 
     const index = feature.get('index') as number;
+    const waypointColor = isDimmed ? this.withAlpha(color, 0.35) : color;
+    const radius = isHighlighted ? 10 : 8;
 
     return new Style({
       image: new Circle({
-        radius: 8,
-        fill: new Fill({ color }),
-        stroke: new Stroke({ color: '#ffffff', width: 2 }),
+        radius,
+        fill: new Fill({ color: waypointColor }),
+        stroke: new Stroke({
+          color: isHighlighted ? '#ffffff' : '#ffffff',
+          width: isHighlighted ? 3 : 2,
+        }),
       }),
       text: new Text({
         text: String(index),
@@ -1248,36 +1277,60 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
     const shape = feature.get('shape') as MarkerShape;
     const color = feature.get('color') as string;
+    const planKey = feature.get('planKey') as string;
+    const isHighlighted = !!this.highlightedPlanKey && planKey === this.highlightedPlanKey;
+    const isDimmed = !!this.highlightedPlanKey && planKey !== this.highlightedPlanKey;
+    const markerColor = isDimmed ? this.withAlpha(color, 0.35) : color;
+    const radiusScale = isHighlighted ? 1.25 : 1;
 
     return new Style({
-      image: this.createMarkerShape(shape, color),
+      image: this.createMarkerShape(shape, markerColor, radiusScale, isHighlighted),
     });
   }
 
-  private createMarkerShape(shape: MarkerShape, color: string): RegularShape {
+  private withAlpha(hex: string, alpha: number): string {
+    const normalized = hex.replace('#', '');
+    if (normalized.length !== 6) {
+      return hex;
+    }
+
+    const red = Number.parseInt(normalized.slice(0, 2), 16);
+    const green = Number.parseInt(normalized.slice(2, 4), 16);
+    const blue = Number.parseInt(normalized.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+  }
+
+  private createMarkerShape(
+    shape: MarkerShape,
+    color: string,
+    radiusScale = 1,
+    highlighted = false
+  ): RegularShape {
+    const strokeWidth = highlighted ? 3 : 2;
+
     switch (shape) {
       case 'triangle':
         return new RegularShape({
           points: 3,
-          radius: 12,
+          radius: 12 * radiusScale,
           rotation: 0,
           fill: new Fill({ color }),
-          stroke: new Stroke({ color: '#ffffff', width: 2 }),
+          stroke: new Stroke({ color: '#ffffff', width: strokeWidth }),
         });
       case 'square':
         return new RegularShape({
           points: 4,
-          radius: 10,
+          radius: 10 * radiusScale,
           angle: Math.PI / 4,
           fill: new Fill({ color }),
-          stroke: new Stroke({ color: '#ffffff', width: 2 }),
+          stroke: new Stroke({ color: '#ffffff', width: strokeWidth }),
         });
       case 'pentagon':
         return new RegularShape({
           points: 5,
-          radius: 11,
+          radius: 11 * radiusScale,
           fill: new Fill({ color }),
-          stroke: new Stroke({ color: '#ffffff', width: 2 }),
+          stroke: new Stroke({ color: '#ffffff', width: strokeWidth }),
         });
     }
   }

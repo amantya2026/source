@@ -3,10 +3,8 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
-  EventEmitter,
   Input,
   OnChanges,
-  Output,
   SimpleChanges,
   ViewChild,
   inject,
@@ -40,12 +38,6 @@ export class OpDashPanelComponent implements OnChanges, AfterViewInit {
   @Input({ required: true }) plans: OpDashPlanInput[] = [];
   @Input({ required: true }) routeEvents: RouteEvent[] = [];
 
-  @Output() planSelect = new EventEmitter<{
-    planKey: string;
-    planeName: string;
-    startingDate: Date | null;
-  }>();
-
   @ViewChild('barChart') private barChart?: UIChart;
   @ViewChild('lineChart') private lineChart?: UIChart;
 
@@ -56,44 +48,15 @@ export class OpDashPanelComponent implements OnChanges, AfterViewInit {
   barChartData: { labels: string[]; datasets: unknown[] } | null = null;
   lineChartData: Record<string, unknown> | null = null;
   lineChartPlugins: unknown[] = [];
+  barChartPlugins: unknown[] = [];
   private lineConsumptionLabels: string[] = [];
+  private barFuelLabels: string[] = [];
 
-  readonly barChartOptions = {
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (context: { parsed: { y: number } }) =>
-            `Total fuel: ${context.parsed.y} L`,
-        },
-      },
-    },
-    scales: {
-      x: {
-        ticks: { color: CHART_TEXT },
-        grid: { color: CHART_GRID },
-      },
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: 'Fuel (L)',
-          color: CHART_TEXT,
-        },
-        ticks: { color: CHART_TEXT },
-        grid: { color: CHART_GRID },
-      },
-    },
-    onHover: (event: { native?: { target?: { style?: { cursor?: string } } } }, elements: unknown[]) => {
-      if (event.native?.target?.style) {
-        event.native.target.style.cursor = elements.length ? 'pointer' : 'default';
-      }
-    },
-  };
+  readonly barChartOptions = this.createBarChartOptions();
 
   readonly lineChartOptions = {
     maintainAspectRatio: false,
+    animation: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -146,26 +109,33 @@ export class OpDashPanelComponent implements OnChanges, AfterViewInit {
     }
   }
 
-  onBarSelect(event: { element?: { index?: number } }): void {
-    const index = event.element?.index;
-    if (index === undefined || !this.summaries[index]) {
+  onBarHover(index: number): void {
+    if (!this.summaries[index]) {
       return;
     }
 
     const summary = this.summaries[index];
-    const plan = this.plans.find((entry) => entry.key === summary.planKey);
+    if (summary.planKey === this.selectedPlanKey) {
+      return;
+    }
 
     this.selectedPlanKey = summary.planKey;
     this.selectedPlanName = summary.planeName;
-    this.planSelect.emit({
-      planKey: summary.planKey,
-      planeName: summary.planeName,
-      startingDate: plan?.startingDate ? new Date(plan.startingDate) : null,
-    });
-    this.rebuildBarChart();
     this.rebuildLineChart(summary.planKey);
     this.cdr.markForCheck();
-    this.scheduleChartRefresh();
+    setTimeout(() => this.scheduleChartRefresh('line'), 0);
+  }
+
+  onBarMouseLeave(): void {
+    if (!this.selectedPlanKey) {
+      return;
+    }
+
+    this.selectedPlanKey = null;
+    this.selectedPlanName = '';
+    this.lineChartData = null;
+    this.lineChartPlugins = [];
+    this.cdr.markForCheck();
   }
 
   private rebuildBarChart(): void {
@@ -179,23 +149,23 @@ export class OpDashPanelComponent implements OnChanges, AfterViewInit {
       return;
     }
 
-    const backgroundColors = this.summaries.map((summary) =>
-      summary.planKey === this.selectedPlanKey ? CHART_PRIMARY_DARK : CHART_PRIMARY
-    );
+    this.barFuelLabels = this.summaries.map((summary) => String(summary.totalFuelLiters));
 
     this.barChartData = {
       labels: this.summaries.map((summary) => summary.planeName),
       datasets: [
         {
-          label: 'Total fuel (L)',
+          label: 'Fuel consumption (L)',
           data: this.summaries.map((summary) => summary.totalFuelLiters),
-          backgroundColor: backgroundColors,
+          backgroundColor: CHART_PRIMARY,
           borderColor: CHART_PRIMARY_DARK,
           borderWidth: 1,
           hoverBackgroundColor: CHART_PRIMARY_LIGHT,
         },
       ],
     };
+
+    this.barChartPlugins = [this.buildBarFuelLabelPlugin(this.barFuelLabels)];
   }
 
   private rebuildLineChart(planKey: string): void {
@@ -228,14 +198,90 @@ export class OpDashPanelComponent implements OnChanges, AfterViewInit {
     };
 
     this.lineChartPlugins = [this.buildConsumptionLabelPlugin(this.lineConsumptionLabels)];
-    this.scheduleChartRefresh();
   }
 
-  private scheduleChartRefresh(): void {
+  private scheduleChartRefresh(target: 'bar' | 'line' | 'both' = 'both'): void {
     setTimeout(() => {
-      this.barChart?.refresh();
-      this.lineChart?.refresh();
+      if (target === 'bar' || target === 'both') {
+        this.barChart?.refresh();
+      }
+      if (target === 'line' || target === 'both') {
+        this.lineChart?.refresh();
+      }
     });
+  }
+
+  private createBarChartOptions() {
+    return {
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context: { parsed: { y: number } }) =>
+              `Fuel consumption: ${context.parsed.y} L`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: CHART_TEXT },
+          grid: { color: CHART_GRID },
+        },
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: 'Fuel consumption (L)',
+            color: CHART_TEXT,
+          },
+          ticks: { color: CHART_TEXT },
+          grid: { color: CHART_GRID },
+        },
+      },
+      onHover: (
+        event: { native?: { target?: { style?: { cursor?: string } } } },
+        elements: { index?: number }[]
+      ) => {
+        if (event.native?.target?.style) {
+          event.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+        }
+
+        const index = elements[0]?.index;
+        if (index !== undefined) {
+          this.onBarHover(index);
+        }
+      },
+    };
+  }
+
+  private buildBarFuelLabelPlugin(labels: string[]) {
+    return {
+      id: 'barFuelLabels',
+      afterDatasetsDraw: (chart: {
+        ctx: CanvasRenderingContext2D;
+        getDatasetMeta: (index: number) => { data: { x: number; y: number }[] };
+      }) => {
+        const meta = chart.getDatasetMeta(0);
+
+        chart.ctx.save();
+        chart.ctx.font = 'bold 10px sans-serif';
+        chart.ctx.fillStyle = CHART_PRIMARY_DARK;
+        chart.ctx.textAlign = 'center';
+
+        meta.data.forEach((bar, index) => {
+          const value = labels[index];
+          if (!value) {
+            return;
+          }
+
+          chart.ctx.fillText(`${value}L`, bar.x, bar.y - 6);
+        });
+
+        chart.ctx.restore();
+      },
+    };
   }
 
   private buildConsumptionLabelPlugin(labels: string[]) {

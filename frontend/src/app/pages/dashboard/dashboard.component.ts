@@ -9,13 +9,12 @@ import {
 } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 import { MessageService } from 'primeng/api';
-import { CardModule } from 'primeng/card';
-import { DividerModule } from 'primeng/divider';
 import { ButtonModule } from 'primeng/button';
 import { RadioButtonModule } from 'primeng/radiobutton';
 import { SliderModule } from 'primeng/slider';
 import { ToastModule } from 'primeng/toast';
 import {
+  FUEL_CAPACITY_LITERS,
   MARKER_SHAPES,
   MAX_PLANS,
   MarkerShape,
@@ -25,12 +24,8 @@ import {
   WaypointAddedEvent,
 } from '../../models/plan.model';
 import { findRouteIntersections } from '../../utils/route-intersection.util';
-import { PlanApiService, PlanRecord, TimelineSettings } from '../../services/plan-api.service';
+import { PlanApiService, PlanRecord } from '../../services/plan-api.service';
 import { OpDashPlanInput } from '../../utils/plan-fuel.util';
-import {
-  missionTimeFromSliderValue,
-  sliderValueFromMissionTime,
-} from '../../utils/plan-timeline.util';
 import {
   snapToNearestEventProgress,
   snapToPreviousEventProgress,
@@ -42,13 +37,22 @@ import { PlanPanelComponent } from './plan-panel/plan-panel.component';
 type PlaybackMode = 'event' | 'time';
 type SidebarPanel = 'plan' | 'deploy' | 'opDash';
 
+interface AircraftSlotInfo {
+  slot: number;
+  planKey: string | null;
+  planeName: string;
+  shape: MarkerShape | null;
+  speed: number;
+  fuelLiters: number;
+  progress: number;
+  active: boolean;
+}
+
 @Component({
   selector: 'app-dashboard',
   imports: [
     FormsModule,
     ReactiveFormsModule,
-    CardModule,
-    DividerModule,
     ButtonModule,
     RadioButtonModule,
     SliderModule,
@@ -89,11 +93,10 @@ export class DashboardComponent implements AfterViewInit {
   routeSelectionActive = false;
   draftWaypointCount = 0;
   vehicleStates: VehicleSimulationState[] = [];
+  selectedPlanKey: string | null = null;
   opDashPlans: OpDashPlanInput[] = [];
   opDashRouteEvents: RouteEvent[] = [];
-  selectedOpDashPlanStartingTime: string | null = null;
-  timelineStartTime: Date | null = null;
-  timelineEndTime: Date | null = null;
+  simulationElapsedMs = 0;
 
   private syncingTimelineFromSimulation = false;
   private manualTimelineScrub = false;
@@ -132,28 +135,52 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   get isTimelineInteractive(): boolean {
-    return this.vehicleStates.length > 0 && this.timelineStartTime != null && this.timelineEndTime != null;
+    return this.isRunning || this.isPaused;
+  }
+
+  get aircraftSlots(): AircraftSlotInfo[] {
+    return Array.from({ length: MAX_PLANS }, (_, index) => {
+      const plan = this.savedPlans.at(index);
+      const planKey = (plan?.get('key')?.value as string | undefined) ?? null;
+      const vehicleState = planKey
+        ? this.vehicleStates.find((state) => state.planKey === planKey)
+        : undefined;
+      const planeName = (plan?.get('planeName')?.value as string | undefined) ?? `Aircraft ${index + 1}`;
+      const planSpeed = Number(plan?.get('speed')?.value ?? 0);
+      const markerShape =
+        (plan?.get('markerShape')?.value as MarkerShape | undefined) ?? vehicleState?.shape ?? null;
+
+      return {
+        slot: index + 1,
+        planKey,
+        planeName,
+        shape: markerShape,
+        speed: vehicleState?.speed ?? planSpeed,
+        fuelLiters: vehicleState?.fuelLiters ?? FUEL_CAPACITY_LITERS,
+        progress: vehicleState?.progress ?? 0,
+        active: !!plan,
+      };
+    });
   }
 
   get currentTime(): string {
-    if (!this.timelineStartTime || !this.timelineEndTime) {
-      return '—';
+    const startingDate = this.firstPlanStartingDate;
+    if (!startingDate) {
+      return '';
     }
 
-    const missionTime = missionTimeFromSliderValue(
-      this.timelineValue,
-      this.timelineStartTime,
-      this.timelineEndTime
-    );
-    return this.formatTimelineTime(missionTime);
+    const displayDate = new Date(startingDate.getTime() + this.simulationElapsedMs);
+    return this.datePipe.transform(displayDate, 'medium') ?? '';
   }
 
-  get timelineStartLabel(): string {
-    return this.formatTimelineTime(this.timelineStartTime);
-  }
+  private get firstPlanStartingDate(): Date | null {
+    const firstPlan = this.savedPlans.at(0);
+    if (!firstPlan) {
+      return null;
+    }
 
-  get timelineEndLabel(): string {
-    return this.formatTimelineTime(this.timelineEndTime);
+    const value = firstPlan.get('startingDate')?.value;
+    return value instanceof Date ? value : null;
   }
 
   ngAfterViewInit(): void {
@@ -165,8 +192,6 @@ export class DashboardComponent implements AfterViewInit {
 
     if (this.activePanel === 'opDash') {
       this.loadOpDashFromDb();
-    } else {
-      this.selectedOpDashPlanStartingTime = null;
     }
 
     if (this.activePanel !== 'plan') {
@@ -176,6 +201,15 @@ export class DashboardComponent implements AfterViewInit {
     if (this.activePanel !== 'deploy') {
       this.aerialDeviceMap?.clearDeploySelection();
     }
+  }
+
+  onPlanDialogVisibleChange(visible: boolean): void {
+    if (visible) {
+      return;
+    }
+
+    this.activePanel = null;
+    this.routeSelectionActive = false;
   }
 
   onStartMapRoute(): void {
@@ -228,12 +262,10 @@ export class DashboardComponent implements AfterViewInit {
             speed: plan.speed,
             shape: plan.markerShape ?? MARKER_SHAPES[this.savedPlans.length - 1],
             route: plan.route,
-            startingDate: new Date(plan.startingDate),
           });
 
           this.simulationComplete = false;
           this.timelineSteps = this.aerialDeviceMap?.getTimelineEventSteps() ?? [0, 100];
-          this.loadTimelineSettings();
 
           this.planDraftForm.reset();
           this.routeSelectionActive = false;
@@ -259,7 +291,7 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   onPlay(): void {
-    this.aerialDeviceMap?.startSimulation(this.playbackMode);
+    this.aerialDeviceMap?.startSimulation();
     this.isRunning = true;
     this.isPaused = false;
     this.simulationComplete = false;
@@ -282,6 +314,7 @@ export class DashboardComponent implements AfterViewInit {
     this.isRunning = false;
     this.isPaused = false;
     this.simulationComplete = false;
+    this.simulationElapsedMs = 0;
     this.timelineValue = 0;
     this.timelineSteps = [0, 100];
   }
@@ -308,17 +341,15 @@ export class DashboardComponent implements AfterViewInit {
     this.routeSelectionActive = false;
     this.draftWaypointCount = 0;
     this.vehicleStates = [];
+    this.selectedPlanKey = null;
     this.opDashPlans = [];
     this.opDashRouteEvents = [];
-    this.selectedOpDashPlanStartingTime = null;
+    this.simulationElapsedMs = 0;
     this.isRunning = false;
     this.isPaused = false;
     this.simulationComplete = false;
     this.timelineValue = 0;
     this.timelineSteps = [0, 100];
-    this.timelineStartTime = null;
-    this.timelineEndTime = null;
-    this.aerialDeviceMap?.setTimelineBounds(null, null);
 
     this.messageService.add({
       severity: 'info',
@@ -333,24 +364,8 @@ export class DashboardComponent implements AfterViewInit {
     this.syncTimelineFromSimulation(states);
   }
 
-  onMissionTimeChange(missionTimeMs: number): void {
-    if (!this.timelineStartTime || !this.timelineEndTime || this.syncingTimelineFromSimulation) {
-      return;
-    }
-
-    const nextValue = sliderValueFromMissionTime(
-      new Date(missionTimeMs),
-      this.timelineStartTime,
-      this.timelineEndTime
-    );
-
-    if (nextValue === this.timelineValue) {
-      return;
-    }
-
-    this.syncingTimelineFromSimulation = true;
-    this.timelineValue = nextValue;
-    this.syncingTimelineFromSimulation = false;
+  onSimulationElapsedChange(elapsedMs: number): void {
+    this.simulationElapsedMs = elapsedMs;
   }
 
   onSimulationFinished(): void {
@@ -370,14 +385,17 @@ export class DashboardComponent implements AfterViewInit {
     return shape.charAt(0).toUpperCase() + shape.slice(1);
   }
 
-  onOpDashPlanSelect(event: {
-    planKey: string;
-    planeName: string;
-    startingDate: Date | null;
-  }): void {
-    this.selectedOpDashPlanStartingTime = event.startingDate
-      ? this.datePipe.transform(event.startingDate, 'medium') ?? null
-      : null;
+  formatProgress(progress: number): string {
+    return `${Math.round(progress)}%`;
+  }
+
+  onAircraftCardClick(aircraft: AircraftSlotInfo): void {
+    if (!aircraft.active || !aircraft.planKey) {
+      return;
+    }
+
+    this.selectedPlanKey =
+      this.selectedPlanKey === aircraft.planKey ? null : aircraft.planKey;
   }
 
   zoomTimeline(delta: number): void {
@@ -420,6 +438,10 @@ export class DashboardComponent implements AfterViewInit {
     }));
 
     this.aerialDeviceMap?.setRouteEvents(intersections);
+
+    if (this.vehicleStates.length > 0) {
+      this.timelineSteps = this.aerialDeviceMap?.getTimelineEventSteps() ?? [0, 100];
+    }
   }
 
   private loadPlansFromDb(): void {
@@ -447,7 +469,6 @@ export class DashboardComponent implements AfterViewInit {
           startingDate: plan.startingDate,
         }));
         this.opDashRouteEvents = this.planApi.toRouteEvents(dashboard.routeEvents);
-        this.applyTimelineSettings(dashboard.timeline);
       },
       error: () => {
         this.messageService.add({
@@ -467,44 +488,9 @@ export class DashboardComponent implements AfterViewInit {
     plans.forEach((plan, index) => {
       this.savedPlans.push(this.createPlanFormGroup(plan));
       this.aerialDeviceMap?.restoreSavedRoute(plan.key, plan.route, index);
-      this.aerialDeviceMap?.startPlanSimulation({
-        planKey: plan.key,
-        speed: plan.speed,
-        shape: plan.markerShape ?? MARKER_SHAPES[index],
-        route: plan.route,
-        startingDate: new Date(plan.startingDate),
-      });
     });
 
     this.syncRouteEvents();
-    this.loadTimelineSettings();
-  }
-
-  private loadTimelineSettings(): void {
-    this.planApi.getTimeline().subscribe({
-      next: (timeline) => this.applyTimelineSettings(timeline),
-      error: () => {
-        this.messageService.add({
-          severity: 'warn',
-          summary: 'Timeline unavailable',
-          detail: 'Could not load mission timeline bounds from database.',
-          life: 4000,
-        });
-      },
-    });
-  }
-
-  private applyTimelineSettings(timeline: TimelineSettings): void {
-    this.timelineStartTime = timeline.sliderStartTime
-      ? new Date(timeline.sliderStartTime)
-      : null;
-    this.timelineEndTime = timeline.sliderEndTime ? new Date(timeline.sliderEndTime) : null;
-    this.aerialDeviceMap?.setTimelineBounds(this.timelineStartTime, this.timelineEndTime);
-    this.timelineValue = 0;
-
-    if (this.timelineStartTime && this.timelineEndTime) {
-      this.aerialDeviceMap?.setTimelineProgress(0, this.playbackMode);
-    }
   }
 
   private createPlanFormGroup(plan: PlanRecord): FormGroup {
@@ -514,7 +500,6 @@ export class DashboardComponent implements AfterViewInit {
       speed: [plan.speed],
       startingDate: [new Date(plan.startingDate)],
       markerShape: [plan.markerShape],
-      distanceMeters: [plan.distanceMeters],
       route: this.fb.array(
         plan.route.map((point) =>
           this.fb.group({
@@ -560,21 +545,8 @@ export class DashboardComponent implements AfterViewInit {
     this.aerialDeviceMap?.setTimelineProgress(nextValue, this.playbackMode);
   }
 
-  private formatTimelineTime(value: Date | null): string {
-    if (!value) {
-      return '—';
-    }
-
-    return this.datePipe.transform(value, 'medium') ?? '—';
-  }
-
   private syncTimelineFromSimulation(states: VehicleSimulationState[]): void {
-    if (
-      !this.isTimelineInteractive ||
-      states.length === 0 ||
-      this.manualTimelineScrub ||
-      this.playbackMode === 'time'
-    ) {
+    if (!this.isTimelineInteractive || states.length === 0 || this.manualTimelineScrub) {
       return;
     }
 

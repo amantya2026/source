@@ -21,6 +21,17 @@
   color: var(--p-text-color);
 }
 
+.op-dash-panel {
+  overflow: visible;
+}
+
+.op-dash-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: visible;
+}
+
 .op-dash-panel__empty {
   margin: 0;
   font-size: 0.82rem;
@@ -39,13 +50,11 @@
 }
 
 .op-dash-card--line {
-  flex: 1 1 auto;
-  min-height: 11rem;
+  flex: 0 0 auto;
 }
 
 .op-dash-card--bar {
   flex: 0 0 auto;
-  min-height: 12rem;
 }
 
 .op-dash-card__title {
@@ -67,9 +76,9 @@
   min-height: 10rem;
 }
 
-.op-dash-card--line .op-dash-card__chart {
-  height: 11rem;
-  min-height: 11rem;
+.op-dash-card__chart--line {
+  height: 12rem;
+  min-height: 12rem;
 }
 
 :host ::ng-deep .op-dash-card__chart .p-chart {

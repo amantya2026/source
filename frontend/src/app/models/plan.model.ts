@@ -21,7 +21,6 @@ export interface PlanSimulationConfig {
   speed: number;
   shape: MarkerShape;
   route: RouteWaypoint[];
-  startingDate: Date;
 }
 
 export interface VehicleSimulationState {
