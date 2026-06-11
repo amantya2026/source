@@ -9,8 +9,9 @@
 /frontend/coverage
  
 # Backend (Maven / Spring Boot)
-/backend/target
+backend/target
 /backend/target/*
+backend/target/
  
 # IDEs and editors
 .idea/
