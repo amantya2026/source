@@ -127,9 +127,6 @@
           >
             <header class="aircraft-card__header">
               <span class="aircraft-card__name">{{ aircraft.planeName }}</span>
-              @if (aircraft.shape) {
-                <span class="aircraft-card__badge">{{ shapeLabel(aircraft.shape) }}</span>
-              }
             </header>
 
             @if (aircraft.active) {

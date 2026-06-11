@@ -15,9 +15,7 @@ import { SliderModule } from 'primeng/slider';
 import { ToastModule } from 'primeng/toast';
 import {
   FUEL_CAPACITY_LITERS,
-  MARKER_SHAPES,
   MAX_PLANS,
-  MarkerShape,
   RouteEvent,
   RouteWaypoint,
   VehicleSimulationState,
@@ -41,7 +39,6 @@ interface AircraftSlotInfo {
   slot: number;
   planKey: string | null;
   planeName: string;
-  shape: MarkerShape | null;
   speed: number;
   fuelLiters: number;
   progress: number;
@@ -142,14 +139,10 @@ export class DashboardComponent implements AfterViewInit {
         : undefined;
       const planeName = (plan?.get('planeName')?.value as string | undefined) ?? `Aircraft ${index + 1}`;
       const planSpeed = Number(plan?.get('speed')?.value ?? 0);
-      const markerShape =
-        (plan?.get('markerShape')?.value as MarkerShape | undefined) ?? vehicleState?.shape ?? null;
-
       return {
         slot: index + 1,
         planKey,
         planeName,
-        shape: markerShape,
         speed: vehicleState?.speed ?? planSpeed,
         fuelLiters: vehicleState?.fuelLiters ?? FUEL_CAPACITY_LITERS,
         progress: vehicleState?.progress ?? 0,
@@ -304,7 +297,6 @@ export class DashboardComponent implements AfterViewInit {
           this.aerialDeviceMap?.startPlanSimulation({
             planKey: plan.key,
             speed: plan.speed,
-            shape: plan.markerShape ?? MARKER_SHAPES[this.savedPlans.length - 1],
             route: plan.route,
             travelDurationMs: plan.travelDurationMs,
           });
@@ -432,10 +424,6 @@ export class DashboardComponent implements AfterViewInit {
     });
   }
 
-  shapeLabel(shape: MarkerShape): string {
-    return shape.charAt(0).toUpperCase() + shape.slice(1);
-  }
-
   formatProgress(progress: number): string {
     return `${Math.round(progress)}%`;
   }
@@ -557,7 +545,6 @@ export class DashboardComponent implements AfterViewInit {
       map.startPlanSimulation({
         planKey,
         speed: Number(plan.get('speed')?.value),
-        shape: (plan.get('markerShape')?.value as MarkerShape) ?? MARKER_SHAPES[index],
         route,
         travelDurationMs: Number(plan.get('travelDurationMs')?.value ?? 0),
       });
@@ -572,7 +559,6 @@ export class DashboardComponent implements AfterViewInit {
       planeName: [plan.planeName],
       speed: [plan.speed],
       startingDate: [new Date(plan.startingDate)],
-      markerShape: [plan.markerShape],
       distanceMeters: [plan.distanceMeters ?? 0],
       travelDurationMs: [plan.travelDurationMs],
       route: this.fb.array(

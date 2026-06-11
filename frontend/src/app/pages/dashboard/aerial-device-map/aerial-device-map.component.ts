@@ -26,7 +26,7 @@ import LineString from 'ol/geom/LineString';
 import type Polygon from 'ol/geom/Polygon';
 import { fromLonLat, toLonLat } from 'ol/proj';
 import { getLength } from 'ol/sphere';
-import { Style, Circle, Fill, Stroke, Text, RegularShape } from 'ol/style';
+import { Style, Circle, Fill, Stroke, Text, RegularShape, Icon } from 'ol/style';
 import { defaults as defaultControls, ScaleLine, Zoom } from 'ol/control';
 import DragPan from 'ol/interaction/DragPan';
 import type { EventsKey } from 'ol/events';
@@ -36,7 +36,6 @@ import type { MapBrowserEvent } from 'ol';
 import { DeployEditAction, DeployArea } from '../../../models/deploy-area.model';
 import {
   FUEL_CAPACITY_LITERS,
-  MarkerShape,
   PlanSimulationConfig,
   RouteEvent,
   RouteWaypoint,
@@ -67,7 +66,6 @@ interface SavedRoute {
 
 interface VehicleRuntime {
   planKey: string;
-  shape: MarkerShape;
   speedKmh: number;
   travelDurationMs: number;
   line: LineString;
@@ -90,6 +88,8 @@ interface DeployPointerPayload {
 }
 
 const PLAN_ROUTE_COLORS = ['#10b981', '#059669', '#34d399'];
+const AIRCRAFT_ICON_SRC = '/assets/aircraft.png';
+const AIRCRAFT_ICON_SIZE = 40;
 const DRAFT_ROUTE_COLOR = '#6ee7b7';
 const MIN_ELLIPSE_RADIUS_M = 80;
 const DEFAULT_DEPLOY_RADIUS_X_M = 150_000;
@@ -141,6 +141,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   private vehicleSource = new VectorSource();
   private vehicleLayer = new VectorLayer({
     source: this.vehicleSource,
+    zIndex: 20,
     style: (feature) => this.styleVehicleFeature(feature),
   });
   private savedRoutes = new Map<string, SavedRoute>();
@@ -326,15 +327,14 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     const speedKmh = Math.max(1, Number(plan.speed) || 1);
     const feature = new Feature({
       geometry: new Point(start),
-      shape: plan.shape,
       planKey: plan.planKey,
       color: this.savedRoutes.get(plan.planKey)?.color ?? '#10b981',
+      rotation: this.getLineRotation(line, 0),
     });
 
     this.vehicleSource.addFeature(feature);
     this.vehicles.push({
       planKey: plan.planKey,
-      shape: plan.shape,
       speedKmh,
       travelDurationMs: Math.max(1, plan.travelDurationMs),
       line,
@@ -618,7 +618,6 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     this.simulationStateChange.emit(
       this.vehicles.map((vehicle) => ({
         planKey: vehicle.planKey,
-        shape: vehicle.shape,
         speed: vehicle.speedKmh,
         fuelLiters: Math.round(vehicle.fuelLiters * 10) / 10,
         progress: Math.round(vehicle.progress * 1000) / 10,
@@ -681,6 +680,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   private syncVehicleToProgress(vehicle: VehicleRuntime): void {
     const coordinate = vehicle.line.getCoordinateAt(vehicle.progress);
     (vehicle.feature.getGeometry() as Point).setCoordinates(coordinate);
+    vehicle.feature.set('rotation', this.getLineRotation(vehicle.line, vehicle.progress));
 
     const lineLength = getLength(vehicle.line);
     const distanceTraveled = lineLength * vehicle.progress;
@@ -1424,16 +1424,15 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       return new Style();
     }
 
-    const shape = feature.get('shape') as MarkerShape;
-    const color = feature.get('color') as string;
     const planKey = feature.get('planKey') as string;
+    const rotation = (feature.get('rotation') as number | undefined) ?? 0;
     const isHighlighted = !!this.highlightedPlanKey && planKey === this.highlightedPlanKey;
     const isDimmed = !!this.highlightedPlanKey && planKey !== this.highlightedPlanKey;
-    const markerColor = isDimmed ? this.withAlpha(color, 0.35) : color;
-    const radiusScale = isHighlighted ? 1.25 : 1;
+    const scale = isHighlighted ? 1.25 : 1;
 
     return new Style({
-      image: this.createMarkerShape(shape, markerColor, radiusScale, isHighlighted),
+      image: this.createAircraftMarker(rotation, scale, isDimmed ? 0.35 : 1),
+      zIndex: isHighlighted ? 22 : 21,
     });
   }
 
@@ -1449,38 +1448,25 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
   }
 
-  private createMarkerShape(
-    shape: MarkerShape,
-    color: string,
-    radiusScale = 1,
-    highlighted = false
-  ): RegularShape {
-    const strokeWidth = highlighted ? 3 : 2;
+  private getLineRotation(line: LineString, progress: number): number {
+    const delta = 0.002;
+    const startT = Math.max(0, progress - delta);
+    const endT = Math.min(1, progress + delta);
+    const start = line.getCoordinateAt(startT);
+    const end = line.getCoordinateAt(endT);
+    return Math.atan2(end[1] - start[1], end[0] - start[0]);
+  }
 
-    switch (shape) {
-      case 'triangle':
-        return new RegularShape({
-          points: 3,
-          radius: 12 * radiusScale,
-          rotation: 0,
-          fill: new Fill({ color }),
-          stroke: new Stroke({ color: '#ffffff', width: strokeWidth }),
-        });
-      case 'square':
-        return new RegularShape({
-          points: 4,
-          radius: 10 * radiusScale,
-          angle: Math.PI / 4,
-          fill: new Fill({ color }),
-          stroke: new Stroke({ color: '#ffffff', width: strokeWidth }),
-        });
-      case 'pentagon':
-        return new RegularShape({
-          points: 5,
-          radius: 11 * radiusScale,
-          fill: new Fill({ color }),
-          stroke: new Stroke({ color: '#ffffff', width: strokeWidth }),
-        });
-    }
+  private createAircraftMarker(rotation: number, scale = 1, opacity = 1): Icon {
+    const size = AIRCRAFT_ICON_SIZE * scale;
+
+    return new Icon({
+      src: AIRCRAFT_ICON_SRC,
+      width: size,
+      height: size,
+      anchor: [0.5, 0.5],
+      rotation: -rotation + Math.PI / 4,
+      opacity,
+    });
   }
 }

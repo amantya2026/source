@@ -2,14 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_CONFIG } from '../config/api.config';
-import { MarkerShape, RouteEvent, RouteWaypoint } from '../models/plan.model';
+import { RouteEvent, RouteWaypoint } from '../models/plan.model';
 
 export interface PlanRecord {
   key: string;
   planeName: string;
   speed: number;
   startingDate: string;
-  markerShape: MarkerShape;
   route: RouteWaypoint[];
   distanceMeters?: number;
   travelDurationMs: number;
