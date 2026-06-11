@@ -184,10 +184,19 @@
       />
 
       <div class="map-time-header">
-      @if (currentTime) {
-        <div class="map-current-time">{{ currentTime }}</div>
-      }
-    </div>
+        @if (mapStartTime) {
+          <div class="map-plan-start">
+            <span class="map-time-label">Start time:</span>
+            <span class="map-time-value">{{ mapStartTime }}</span>
+          </div>
+        }
+        @if (currentTime) {
+          <div class="map-current-time">
+            <span class="map-time-label">Current time:</span>
+            <span class="map-time-value">{{ currentTime }}</span>
+          </div>
+        }
+      </div>
 
     @if (activePanel === 'plan') {
       <div class="map-overlay map-overlay--plan">

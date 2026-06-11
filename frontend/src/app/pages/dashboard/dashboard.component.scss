@@ -398,29 +398,34 @@ $op-dash-overlay-width: 22rem;
   max-width: calc(100% - 1.5rem);
 }
 
-.map-plan-start {
+.map-plan-start,
+.map-current-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.45rem 0.85rem;
-  border: 1px solid #34d399;
   border-radius: 999px;
   background: var(--p-surface-0);
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.1);
   font-size: 0.82rem;
   font-weight: 600;
-  color: #34d399;
+  color: #000000;
   white-space: nowrap;
 }
 
+.map-plan-start {
+  border: 1px solid #34d399;
+}
+
 .map-current-time {
-  padding: 0.45rem 0.85rem;
   border: 1px solid var(--p-content-border-color);
-  border-radius: 999px;
-  background: var(--p-surface-0);
-  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.1);
-  font-size: 0.82rem;
-  font-style: italic;
-  color: var(--p-text-muted-color);
   pointer-events: none;
-  white-space: nowrap;
+}
+
+.map-time-label,
+.map-time-value {
+  font-weight: 600;
+  color: #000000;
 }
 
 .map-overlay {

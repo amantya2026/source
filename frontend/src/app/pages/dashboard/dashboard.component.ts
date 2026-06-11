@@ -158,6 +158,16 @@ export class DashboardComponent implements AfterViewInit {
     });
   }
 
+  get mapStartTime(): string {
+    const firstPlan = this.savedPlans.at(0);
+    const startingDate = firstPlan?.get('startingDate')?.value;
+    if (!(startingDate instanceof Date)) {
+      return '';
+    }
+
+    return this.datePipe.transform(startingDate, 'medium') ?? '';
+  }
+
   get currentTime(): string {
     const start = this.getTimelineStart();
     const end = this.getTimelineEnd();
