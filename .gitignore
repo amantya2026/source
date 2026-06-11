@@ -11,11 +11,7 @@
 /frontend/node_modules
 /frontend/.angular/cache
 /frontend/coverage
-<<<<<<< HEAD
 /frontend/.angular/cache/*
-=======
-<<<<<<< HEAD
->>>>>>> fa9d6320465dca3180443ee25c35afbe3f0f6ca2
  
 # Backend (Maven / Spring Boot)
 backend/target
