@@ -22,7 +22,7 @@ import {
   WaypointAddedEvent,
 } from '../../models/plan.model';
 import { findRouteIntersections } from '../../utils/route-intersection.util';
-import { PlanApiService, PlanRecord } from '../../services/plan-api.service';
+import { PlanApiService, PlanRecord, TimelineSettings } from '../../services/plan-api.service';
 import { OpDashPlanInput } from '../../utils/plan-fuel.util';
 import {
   snapToNearestEventProgress,
@@ -94,6 +94,7 @@ export class DashboardComponent implements AfterViewInit {
   opDashPlans: OpDashPlanInput[] = [];
   opDashRouteEvents: RouteEvent[] = [];
   simulationElapsedMs = 0;
+  timelineSettings: TimelineSettings | null = null;
 
   private syncingTimelineFromSimulation = false;
   private manualTimelineScrub = false;
@@ -152,13 +153,8 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   get mapStartTime(): string {
-    const firstPlan = this.savedPlans.at(0);
-    const startingDate = firstPlan?.get('startingDate')?.value;
-    if (!(startingDate instanceof Date)) {
-      return '';
-    }
-
-    return this.datePipe.transform(startingDate, 'medium') ?? '';
+    const start = this.getTimelineStart();
+    return start ? (this.datePipe.transform(start, 'medium') ?? '') : '';
   }
 
   get currentTime(): string {
@@ -184,44 +180,13 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   private getTimelineStart(): Date | null {
-    let earliest: Date | null = null;
-
-    for (const plan of this.savedPlans.controls) {
-      const startingDate = plan.get('startingDate')?.value;
-      if (!(startingDate instanceof Date)) {
-        continue;
-      }
-
-      if (!earliest || startingDate < earliest) {
-        earliest = startingDate;
-      }
-    }
-
-    return earliest;
+    const value = this.timelineSettings?.sliderStartTime;
+    return value ? new Date(value) : null;
   }
 
   private getTimelineEnd(): Date | null {
-    let latest: Date | null = null;
-
-    for (const plan of this.savedPlans.controls) {
-      const startingDate = plan.get('startingDate')?.value;
-      if (!(startingDate instanceof Date)) {
-        continue;
-      }
-
-      const travelDurationMs = Number(plan.get('travelDurationMs')?.value ?? 0);
-      const planEnd = new Date(startingDate.getTime() + Math.max(travelDurationMs, 0));
-
-      if (!latest || planEnd > latest) {
-        latest = planEnd;
-      }
-    }
-
-    return latest;
-  }
-
-  private get firstPlanStartingDate(): Date | null {
-    return this.getTimelineStart();
+    const value = this.timelineSettings?.sliderEndTime;
+    return value ? new Date(value) : null;
   }
 
   ngAfterViewInit(): void {
@@ -303,6 +268,7 @@ export class DashboardComponent implements AfterViewInit {
 
           this.simulationComplete = false;
           this.refreshTimelineSteps();
+          this.loadTimelineFromBackend();
 
           this.planDraftForm.reset();
           this.routeSelectionActive = false;
@@ -393,6 +359,7 @@ export class DashboardComponent implements AfterViewInit {
     this.simulationComplete = false;
     this.timelineValue = 0;
     this.timelineSteps = [0, 100];
+    this.loadTimelineFromBackend();
 
     this.messageService.add({
       severity: 'info',
@@ -477,22 +444,10 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   private loadPlansFromDb(): void {
-    this.planApi.listPlans().subscribe({
-      next: (plans) => this.applyPlansFromApi(plans),
-      error: () => {
-        this.messageService.add({
-          severity: 'warn',
-          summary: 'Plans not loaded',
-          detail: 'Could not load saved plans from database.',
-          life: 4000,
-        });
-      },
-    });
-  }
-
-  private loadOpDashFromDb(): void {
     this.planApi.getDashboard().subscribe({
       next: (dashboard) => {
+        this.applyPlansFromApi(dashboard.plans);
+        this.applyTimelineSettings(dashboard.timeline);
         this.opDashPlans = dashboard.plans.map((plan) => ({
           key: plan.key,
           planeName: plan.planeName,
@@ -504,13 +459,25 @@ export class DashboardComponent implements AfterViewInit {
       },
       error: () => {
         this.messageService.add({
-          severity: 'error',
-          summary: 'Dashboard unavailable',
-          detail: 'Could not load output dashboard from database.',
-          life: 5000,
+          severity: 'warn',
+          summary: 'Plans not loaded',
+          detail: 'Could not load saved plans from database.',
+          life: 4000,
         });
       },
     });
+  }
+
+  private loadTimelineFromBackend(): void {
+    this.planApi.getTimeline().subscribe({
+      next: (timeline) => this.applyTimelineSettings(timeline),
+      error: () => this.applyTimelineSettings(null),
+    });
+  }
+
+  private applyTimelineSettings(timeline: TimelineSettings | null | undefined): void {
+    this.timelineSettings =
+      timeline?.sliderStartTime || timeline?.sliderEndTime ? timeline : null;
   }
 
   private applyPlansFromApi(plans: PlanRecord[]): void {

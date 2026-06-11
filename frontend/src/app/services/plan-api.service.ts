@@ -21,6 +21,11 @@ export interface CreatePlanRequest {
   route: RouteWaypoint[];
 }
 
+export interface TimelineSettings {
+  sliderStartTime: string | null;
+  sliderEndTime: string | null;
+}
+
 export interface DashboardPayload {
   plans: PlanRecord[];
   routeEvents: Array<{
@@ -28,6 +33,7 @@ export interface DashboardPayload {
     latitude: number;
     planKeys: string[];
   }>;
+  timeline: TimelineSettings;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -41,6 +47,10 @@ export class PlanApiService {
 
   getDashboard(): Observable<DashboardPayload> {
     return this.http.get<DashboardPayload>(`${this.baseUrl}/dashboard`);
+  }
+
+  getTimeline(): Observable<TimelineSettings> {
+    return this.http.get<TimelineSettings>(`${this.baseUrl}/timeline`);
   }
 
   createPlan(request: CreatePlanRequest): Observable<PlanRecord> {

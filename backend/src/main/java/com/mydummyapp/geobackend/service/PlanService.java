@@ -18,7 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class PlanService {
 
     private static final int MAX_PLANS = 3;
-    private static final List<String> MARKER_SHAPES = List.of("triangle", "square", "pentagon");
+    private static final String MARKER_SHAPE = "arrow";
 
     private final PlanRepository planRepository;
     private final RouteIntersectionService routeIntersectionService;
@@ -65,7 +65,7 @@ public class PlanService {
         entity.setPlaneName(request.planeName());
         entity.setSpeed(request.speed());
         entity.setStartingDate(request.startingDate());
-        entity.setMarkerShape(MARKER_SHAPES.get((int) existingCount));
+        entity.setMarkerShape(MARKER_SHAPE);
         entity.setSortOrder((int) existingCount);
         entity.setRouteWaypoints(request.route());
         entity.setDistanceMeters(RouteDistanceUtil.routeLengthMeters(request.route()));
