@@ -1,24 +1,24 @@
 import {
   BaseEditableHolder
 } from "./chunk-USX47LQZ.js";
-import "./chunk-7HE2IN3P.js";
 import {
   AutoFocus
 } from "./chunk-KOMRT4HH.js";
 import "./chunk-FC2DD4LQ.js";
+import "./chunk-7HE2IN3P.js";
 import {
   PARENT_INSTANCE
 } from "./chunk-HFZ3IEIT.js";
-import {
-  Bind,
-  BindModule
-} from "./chunk-RTWT2CPK.js";
 import {
   BaseStyle
 } from "./chunk-7DJM2MRT.js";
 import {
   SharedModule
 } from "./chunk-T3AZFDUA.js";
+import {
+  Bind,
+  BindModule
+} from "./chunk-RTWT2CPK.js";
 import {
   $,
   D,

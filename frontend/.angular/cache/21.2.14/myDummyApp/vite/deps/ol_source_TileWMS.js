@@ -1,6 +1,6 @@
 import {
   Source_default
-} from "./chunk-CN4JDPON.js";
+} from "./chunk-2RP2KOSJ.js";
 import {
   ImageTile_default,
   TileRange_default,
@@ -11,18 +11,22 @@ import {
   getCacheKey,
   hash,
   withinExtentAndZ
-} from "./chunk-2RTQL7EE.js";
+} from "./chunk-BYV5VGAK.js";
 import {
   TileState_default
 } from "./chunk-3U7ETZD3.js";
 import {
-  DEFAULT_MAX_ZOOM,
-  DEFAULT_TILE_SIZE
-} from "./chunk-P3G6H5S3.js";
-import {
   scale,
   toSize
 } from "./chunk-TLMEWSOH.js";
+import {
+  WORKER_OFFSCREEN_CANVAS
+} from "./chunk-JZYPKUF6.js";
+import {
+  DEFAULT_MAX_ZOOM,
+  DEFAULT_TILE_SIZE
+} from "./chunk-P3G6H5S3.js";
+import "./chunk-6NHAKJI5.js";
 import {
   intersectsLinearRing
 } from "./chunk-PNC6JOPQ.js";
@@ -32,12 +36,7 @@ import {
   equivalent,
   get,
   transform
-} from "./chunk-PUZBTDX2.js";
-import "./chunk-N643VJ64.js";
-import "./chunk-6NHAKJI5.js";
-import {
-  WORKER_OFFSCREEN_CANVAS
-} from "./chunk-JZYPKUF6.js";
+} from "./chunk-VCLZ4PGI.js";
 import {
   buffer,
   compareVersions,
@@ -49,6 +48,7 @@ import {
   getTopLeft,
   getWidth
 } from "./chunk-F54ISTXV.js";
+import "./chunk-N643VJ64.js";
 import {
   ceil,
   clamp,

@@ -123,7 +123,7 @@ export function buildPlanFuelEventSeries(
     return [];
   }
 
-  const points: PlanFuelEventPoint[] = [toFuelPoint('Start', 0, 0)];
+  const points: PlanFuelEventPoint[] = [toFuelPoint('Waypoint 1', 0, 0)];
   let cumulative = 0;
 
   for (let index = 1; index < plan.route.length; index++) {
@@ -132,7 +132,7 @@ export function buildPlanFuelEventSeries(
       plan.speed
     );
     cumulative += segmentFuel;
-    points.push(toFuelPoint(`Event ${index}`, cumulative, segmentFuel));
+    points.push(toFuelPoint(`Waypoint ${index + 1}`, cumulative, segmentFuel));
   }
 
   const interceptEvents = routeEvents

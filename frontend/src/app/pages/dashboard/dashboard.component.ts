@@ -13,6 +13,7 @@ import { ButtonModule } from 'primeng/button';
 import { RadioButtonModule } from 'primeng/radiobutton';
 import { SliderModule } from 'primeng/slider';
 import { ToastModule } from 'primeng/toast';
+import { TooltipModule } from 'primeng/tooltip';
 import {
   FUEL_CAPACITY_LITERS,
   MARKER_SHAPES,
@@ -57,6 +58,7 @@ interface AircraftSlotInfo {
     RadioButtonModule,
     SliderModule,
     ToastModule,
+    TooltipModule,
     AerialDeviceMapComponent,
     PlanPanelComponent,
     OpDashPanelComponent,
@@ -86,7 +88,7 @@ export class DashboardComponent implements AfterViewInit {
   isRunning = false;
   isPaused = false;
   simulationComplete = false;
-  playbackMode: PlaybackMode = 'event';
+  playbackMode: PlaybackMode = 'time';
   activePanel: SidebarPanel | null = null;
   timelineValue = 0;
   timelineSteps: number[] = [0, 100];
@@ -114,12 +116,7 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   get canPlaySimulation(): boolean {
-    return (
-      this.vehicleStates.length > 0 &&
-      !this.isRunning &&
-      !this.isPaused &&
-      !this.simulationComplete
-    );
+    return this.savedPlans.length > 0 && !this.isRunning && !this.isPaused;
   }
 
   get canPauseSimulation(): boolean {
@@ -164,23 +161,66 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   get currentTime(): string {
-    const startingDate = this.firstPlanStartingDate;
-    if (!startingDate) {
+    const start = this.getTimelineStart();
+    const end = this.getTimelineEnd();
+    if (!start || !end) {
       return '';
     }
 
-    const displayDate = new Date(startingDate.getTime() + this.simulationElapsedMs);
+    const durationMs = end.getTime() - start.getTime();
+    const displayDate = new Date(start.getTime() + (this.timelineValue / 100) * durationMs);
     return this.datePipe.transform(displayDate, 'medium') ?? '';
   }
 
-  private get firstPlanStartingDate(): Date | null {
-    const firstPlan = this.savedPlans.at(0);
-    if (!firstPlan) {
-      return null;
+  get timelineStartLabel(): string {
+    const start = this.getTimelineStart();
+    return start ? (this.datePipe.transform(start, 'medium') ?? '') : '';
+  }
+
+  get timelineEndLabel(): string {
+    const end = this.getTimelineEnd();
+    return end ? (this.datePipe.transform(end, 'medium') ?? '') : '';
+  }
+
+  private getTimelineStart(): Date | null {
+    let earliest: Date | null = null;
+
+    for (const plan of this.savedPlans.controls) {
+      const startingDate = plan.get('startingDate')?.value;
+      if (!(startingDate instanceof Date)) {
+        continue;
+      }
+
+      if (!earliest || startingDate < earliest) {
+        earliest = startingDate;
+      }
     }
 
-    const value = firstPlan.get('startingDate')?.value;
-    return value instanceof Date ? value : null;
+    return earliest;
+  }
+
+  private getTimelineEnd(): Date | null {
+    let latest: Date | null = null;
+
+    for (const plan of this.savedPlans.controls) {
+      const startingDate = plan.get('startingDate')?.value;
+      if (!(startingDate instanceof Date)) {
+        continue;
+      }
+
+      const travelDurationMs = Number(plan.get('travelDurationMs')?.value ?? 0);
+      const planEnd = new Date(startingDate.getTime() + Math.max(travelDurationMs, 0));
+
+      if (!latest || planEnd > latest) {
+        latest = planEnd;
+      }
+    }
+
+    return latest;
+  }
+
+  private get firstPlanStartingDate(): Date | null {
+    return this.getTimelineStart();
   }
 
   ngAfterViewInit(): void {
@@ -189,10 +229,6 @@ export class DashboardComponent implements AfterViewInit {
 
   onSidebarSelect(panel: SidebarPanel): void {
     this.activePanel = this.activePanel === panel ? null : panel;
-
-    if (this.activePanel === 'opDash') {
-      this.loadOpDashFromDb();
-    }
 
     if (this.activePanel !== 'plan') {
       this.routeSelectionActive = false;
@@ -262,10 +298,11 @@ export class DashboardComponent implements AfterViewInit {
             speed: plan.speed,
             shape: plan.markerShape ?? MARKER_SHAPES[this.savedPlans.length - 1],
             route: plan.route,
+            travelDurationMs: plan.travelDurationMs,
           });
 
           this.simulationComplete = false;
-          this.timelineSteps = this.aerialDeviceMap?.getTimelineEventSteps() ?? [0, 100];
+          this.refreshTimelineSteps();
 
           this.planDraftForm.reset();
           this.routeSelectionActive = false;
@@ -291,10 +328,16 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   onPlay(): void {
+    if (this.simulationComplete) {
+      this.aerialDeviceMap?.resetSimulation();
+      this.simulationComplete = false;
+      this.timelineValue = 0;
+    }
+
+    this.ensureSimulationVehiclesReady();
     this.aerialDeviceMap?.startSimulation();
     this.isRunning = true;
     this.isPaused = false;
-    this.simulationComplete = false;
   }
 
   onPause(): void {
@@ -398,17 +441,6 @@ export class DashboardComponent implements AfterViewInit {
       this.selectedPlanKey === aircraft.planKey ? null : aircraft.planKey;
   }
 
-  zoomTimeline(delta: number): void {
-    if (!this.isTimelineInteractive) {
-      return;
-    }
-
-    this.pauseSimulationForTimelineScrub();
-    this.manualTimelineScrub = true;
-    this.applyTimelineChange(Math.min(100, Math.max(0, this.timelineValue + delta)));
-    this.manualTimelineScrub = false;
-  }
-
   onTimelineChange(value: number): void {
     if (!this.isTimelineInteractive || this.syncingTimelineFromSimulation) {
       return;
@@ -442,6 +474,10 @@ export class DashboardComponent implements AfterViewInit {
     if (this.vehicleStates.length > 0) {
       this.timelineSteps = this.aerialDeviceMap?.getTimelineEventSteps() ?? [0, 100];
     }
+  }
+
+  private refreshTimelineSteps(): void {
+    this.timelineSteps = this.aerialDeviceMap?.getTimelineEventSteps() ?? [0, 100];
   }
 
   private loadPlansFromDb(): void {
@@ -491,6 +527,35 @@ export class DashboardComponent implements AfterViewInit {
     });
 
     this.syncRouteEvents();
+    this.ensureSimulationVehiclesReady();
+    this.refreshTimelineSteps();
+  }
+
+  private ensureSimulationVehiclesReady(): void {
+    const map = this.aerialDeviceMap;
+    if (!map) {
+      return;
+    }
+
+    this.syncRouteEvents();
+
+    this.savedPlans.controls.forEach((plan, index) => {
+      const planKey = plan.get('key')?.value as string;
+      const route = this.getPlanRoute(plan);
+      if (!planKey || route.length === 0) {
+        return;
+      }
+
+      map.startPlanSimulation({
+        planKey,
+        speed: Number(plan.get('speed')?.value),
+        shape: (plan.get('markerShape')?.value as MarkerShape) ?? MARKER_SHAPES[index],
+        route,
+        travelDurationMs: Number(plan.get('travelDurationMs')?.value ?? 0),
+      });
+    });
+
+    this.timelineSteps = map.getTimelineEventSteps();
   }
 
   private createPlanFormGroup(plan: PlanRecord): FormGroup {
@@ -500,6 +565,8 @@ export class DashboardComponent implements AfterViewInit {
       speed: [plan.speed],
       startingDate: [new Date(plan.startingDate)],
       markerShape: [plan.markerShape],
+      distanceMeters: [plan.distanceMeters ?? 0],
+      travelDurationMs: [plan.travelDurationMs],
       route: this.fb.array(
         plan.route.map((point) =>
           this.fb.group({

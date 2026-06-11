@@ -6,6 +6,7 @@ import com.mydummyapp.geobackend.model.DashboardDto;
 import com.mydummyapp.geobackend.model.PlanDto;
 import com.mydummyapp.geobackend.model.TimelineSettingsDto;
 import com.mydummyapp.geobackend.repository.PlanRepository;
+import com.mydummyapp.geobackend.util.PlanTimelineUtil;
 import com.mydummyapp.geobackend.util.RouteDistanceUtil;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -88,7 +89,9 @@ public class PlanService {
                 entity.getStartingDate(),
                 entity.getMarkerShape(),
                 entity.getRouteWaypoints(),
-                entity.getDistanceMeters());
+                entity.getDistanceMeters(),
+                PlanTimelineUtil.travelDurationMsForPlan(
+                        entity.getDistanceMeters(), entity.getSpeed()));
     }
 
     private void validateCreateRequest(CreatePlanRequest request) {

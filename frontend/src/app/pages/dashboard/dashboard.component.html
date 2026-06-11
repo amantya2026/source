@@ -123,6 +123,8 @@
           type="button"
           class="map-toolbar-btn"
           aria-label="Play"
+          pTooltip="Play"
+          tooltipPosition="bottom"
           [disabled]="!canPlaySimulation"
           (click)="onPlay()"
         >
@@ -132,6 +134,8 @@
           type="button"
           class="map-toolbar-btn"
           aria-label="Pause"
+          pTooltip="Pause"
+          tooltipPosition="bottom"
           [disabled]="!canPauseSimulation"
           (click)="onPause()"
         >
@@ -141,6 +145,8 @@
           type="button"
           class="map-toolbar-btn"
           aria-label="Resume"
+          pTooltip="Resume"
+          tooltipPosition="bottom"
           [disabled]="!canResumeSimulation"
           (click)="onResume()"
         >
@@ -150,6 +156,8 @@
           type="button"
           class="map-toolbar-btn"
           aria-label="Stop"
+          pTooltip="Stop"
+          tooltipPosition="bottom"
           [disabled]="!canStopSimulation"
           (click)="onStop()"
         >
@@ -202,7 +210,7 @@
     }
 
     @if (activePanel === 'opDash') {
-      <div class="map-overlay map-overlay--op-dash">
+      <div class="map-overlay map-overlay--op-dash" aria-label="Output dashboard">
         <app-op-dash-panel
           [plans]="opDashPlans"
           [routeEvents]="opDashRouteEvents"
@@ -212,36 +220,23 @@
 
     <div class="map-toolbar map-toolbar--bottom">
       <div class="timeline-track">
-        <p-slider
-          [(ngModel)]="timelineValue"
-          [min]="0"
-          [max]="100"
-          [step]="1"
-          [disabled]="!isTimelineInteractive"
-          class="timeline-slider"
-          (ngModelChange)="onTimelineChange($event)"
-        />
-      </div>
-
-      <div class="timeline-zoom">
-        <button
-          type="button"
-          class="map-toolbar-btn"
-          aria-label="Zoom in"
-          [disabled]="!isTimelineInteractive"
-          (click)="zoomTimeline(5)"
-        >
-          <i class="pi pi-plus"></i>
-        </button>
-        <button
-          type="button"
-          class="map-toolbar-btn"
-          aria-label="Zoom out"
-          [disabled]="!isTimelineInteractive"
-          (click)="zoomTimeline(-5)"
-        >
-          <i class="pi pi-minus"></i>
-        </button>
+        <div class="timeline-slider-wrap">
+          <p-slider
+            [(ngModel)]="timelineValue"
+            [min]="0"
+            [max]="100"
+            [step]="1"
+            [disabled]="!isTimelineInteractive"
+            class="timeline-slider"
+            (ngModelChange)="onTimelineChange($event)"
+          />
+        </div>
+        @if (timelineStartLabel || timelineEndLabel) {
+          <div class="timeline-labels">
+            <span class="timeline-bound timeline-bound--start">{{ timelineStartLabel }}</span>
+            <span class="timeline-bound timeline-bound--end">{{ timelineEndLabel }}</span>
+          </div>
+        }
       </div>
     </div>
     </div>

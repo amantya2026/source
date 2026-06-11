@@ -72,7 +72,7 @@ export class OpDashPanelComponent implements OnChanges, AfterViewInit {
       x: {
         title: {
           display: true,
-          text: 'Events',
+          text: 'Waypoints',
           color: CHART_TEXT,
         },
         ticks: { color: CHART_TEXT },

@@ -10,4 +10,5 @@ public record PlanDto(
         Instant startingDate,
         String markerShape,
         List<WaypointDto> route,
-        double distanceMeters) {}
+        double distanceMeters,
+        long travelDurationMs) {}

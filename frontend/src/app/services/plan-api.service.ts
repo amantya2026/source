@@ -11,6 +11,8 @@ export interface PlanRecord {
   startingDate: string;
   markerShape: MarkerShape;
   route: RouteWaypoint[];
+  distanceMeters?: number;
+  travelDurationMs: number;
 }
 
 export interface CreatePlanRequest {

@@ -7,7 +7,7 @@
     <div class="op-dash-charts" (mouseleave)="onBarMouseLeave()">
       @if (selectedPlanKey && lineChartData) {
         <section class="op-dash-card op-dash-card--line">
-          <h3 class="op-dash-card__title">{{ selectedPlanName }} — fuel remaining by event</h3>
+          <h3 class="op-dash-card__title">{{ selectedPlanName }} — fuel remaining by waypoint</h3>
           <div class="op-dash-card__chart op-dash-card__chart--line">
             <p-chart
               #lineChart

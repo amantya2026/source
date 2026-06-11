@@ -5,6 +5,7 @@ import {
   Component,
   ElementRef,
   EventEmitter,
+  inject,
   Input,
   NgZone,
   OnChanges,
@@ -56,6 +57,7 @@ import {
   snapToNearestEventProgress,
   snapToPreviousEventProgress,
 } from '../../../utils/simulation-event.util';
+import { DeployAreaApiService } from '../../../services/deploy-area-api.service';
 import { DeployAreaCardComponent } from './deploy-area-card/deploy-area-card.component';
 
 interface SavedRoute {
@@ -67,6 +69,7 @@ interface VehicleRuntime {
   planKey: string;
   shape: MarkerShape;
   speedKmh: number;
+  travelDurationMs: number;
   line: LineString;
   progress: number;
   fuelLiters: number;
@@ -150,16 +153,21 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   private deployDragState?: DeployDragState;
   private deployPointerDown = false;
   private deployDragging = false;
+  private deployAreaDirty = false;
+  private deployDragSessionActive = false;
   private suppressNextDeployClick = false;
   private clickKey?: EventsKey;
   private deployClickKey?: EventsKey;
   private deployDomCleanup: (() => void)[] = [];
+  private deployWindowPointerCleanup: (() => void) | null = null;
   private vehicles: VehicleRuntime[] = [];
   private routeEvents: RouteEvent[] = [];
   private animationFrame?: number;
   private lastFrameTime?: number;
   private simulationRunning = false;
   private simulationElapsedMs = 0;
+
+  private readonly deployAreaApi = inject(DeployAreaApiService);
 
   constructor(
     private readonly ngZone: NgZone,
@@ -228,11 +236,14 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   }
 
   clearDeploySelection(): void {
+    this.commitDeployAreaChanges();
     this.hideDeployCard();
     this.activeDeployAction = null;
     this.deployDragState = undefined;
     this.deployDragging = false;
     this.deployPointerDown = false;
+    this.deployDragSessionActive = false;
+    this.detachDeployWindowPointerTracking();
     this.resetDeployMapHint();
     this.updateDeployCursorClasses();
     this.refreshDeployStyles();
@@ -244,20 +255,27 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       return;
     }
 
-    const feature = this.deployAreaFeatures.get(this.selectedDeployAreaId);
+    const areaId = this.selectedDeployAreaId;
+    const feature = this.deployAreaFeatures.get(areaId);
     if (feature) {
       this.deployAreaSource.removeFeature(feature);
     }
 
-    this.deployAreas.delete(this.selectedDeployAreaId);
-    this.deployAreaFeatures.delete(this.selectedDeployAreaId);
+    this.deployAreas.delete(areaId);
+    this.deployAreaFeatures.delete(areaId);
     this.clearReshapeHandles();
     this.activeDeployAction = null;
     this.hideDeployCard();
+
+    this.deployAreaApi.deleteDeployArea(areaId).subscribe({
+      error: (error) => console.error('Failed to delete deploy area from database', error),
+    });
+
     this.cdr.markForCheck();
   }
 
   onDeployMove(): void {
+    this.commitDeployAreaChanges();
     this.clearReshapeHandles();
     this.activeDeployAction = 'move';
     this.updateDeployCursorClasses();
@@ -265,6 +283,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   }
 
   onDeployResize(): void {
+    this.commitDeployAreaChanges();
     this.clearReshapeHandles();
     this.activeDeployAction = 'resize';
     this.updateDeployCursorClasses();
@@ -272,6 +291,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
   }
 
   onDeployReshape(): void {
+    this.commitDeployAreaChanges();
     this.activeDeployAction = 'reshape';
     this.deployMapHint = 'Drag control points to reshape the Bezier curve';
 
@@ -281,6 +301,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
         this.ensureBezierControlPoints(area);
         this.updateDeployAreaFeature(area);
         this.updateReshapeHandles(area);
+        this.persistDeployAreaUpdate(area);
       }
     }
 
@@ -315,6 +336,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       planKey: plan.planKey,
       shape: plan.shape,
       speedKmh,
+      travelDurationMs: Math.max(1, plan.travelDurationMs),
       line,
       progress: 0,
       fuelLiters: FUEL_CAPACITY_LITERS,
@@ -409,9 +431,8 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
     for (const vehicle of this.vehicles) {
       const elapsedTarget = progressFromElapsed(
-        vehicle.line,
-        vehicle.speedKmh,
-        this.simulationElapsedMs
+        this.simulationElapsedMs,
+        vehicle.travelDurationMs
       );
       const vehicleProgress =
         mode === 'event'
@@ -470,6 +491,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
     this.map.updateSize();
     requestAnimationFrame(() => this.map?.updateSize());
+    this.loadSavedDeployAreas();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -553,9 +575,8 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       if (vehicle.finished) continue;
 
       const targetProgress = progressFromElapsed(
-        vehicle.line,
-        vehicle.speedKmh,
-        this.simulationElapsedMs
+        this.simulationElapsedMs,
+        vehicle.travelDurationMs
       );
 
       vehicle.progress = targetProgress;
@@ -572,9 +593,8 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       if (vehicle.finished) continue;
 
       const targetProgress = progressFromElapsed(
-        vehicle.line,
-        vehicle.speedKmh,
-        this.simulationElapsedMs
+        this.simulationElapsedMs,
+        vehicle.travelDurationMs
       );
       const nextProgress = snapToPreviousEventProgress(
         targetProgress,
@@ -611,11 +631,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     let maxDuration = 0;
 
     for (const vehicle of this.vehicles) {
-      const lineLength = getLength(vehicle.line);
-      const speedMs = (vehicle.speedKmh * 1000) / 3600;
-      if (lineLength > 0 && speedMs > 0) {
-        maxDuration = Math.max(maxDuration, (lineLength / speedMs) * 1000);
-      }
+      maxDuration = Math.max(maxDuration, vehicle.travelDurationMs);
     }
 
     return maxDuration;
@@ -646,9 +662,8 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       }
 
       const elapsedProgress = progressFromElapsed(
-        vehicle.line,
-        vehicle.speedKmh,
-        this.simulationElapsedMs
+        this.simulationElapsedMs,
+        vehicle.travelDurationMs
       );
 
       vehicle.progress =
@@ -750,6 +765,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       cleanup();
     }
     this.deployDomCleanup = [];
+    this.detachDeployWindowPointerTracking();
   }
 
   private onMapClick(event: MapBrowserEvent<PointerEvent | KeyboardEvent | WheelEvent>): void {
@@ -824,6 +840,9 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
       }
 
       this.deployDragging = true;
+      this.deployDragSessionActive = true;
+      this.attachDeployWindowPointerTracking();
+      this.applyDeployDrag(event.coordinate);
       this.updateDeployCursorClasses();
     }
   }
@@ -838,21 +857,42 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     }
   }
 
-  private onDeployPointerUp(_event: DeployPointerPayload): void {
+  private onDeployPointerUp(event: DeployPointerPayload): void {
     if (!this.deployEditingEnabled) {
       return;
     }
 
     if (this.deployDragState) {
-      this.deployDragState = undefined;
-      this.deployDragging = false;
-      this.deployPointerDown = false;
-      this.suppressNextDeployClick = true;
-      this.updateDeployCursorClasses();
+      this.finalizeDeployDrag(event);
       return;
     }
 
     this.deployPointerDown = false;
+  }
+
+  private finalizeDeployDrag(event: DeployPointerPayload): void {
+    if (!this.deployDragState) {
+      return;
+    }
+
+    const areaId = this.selectedDeployAreaId;
+    this.applyDeployDrag(event.coordinate);
+    this.deployDragState = undefined;
+    this.deployDragging = false;
+    this.deployPointerDown = false;
+    this.suppressNextDeployClick = true;
+    this.detachDeployWindowPointerTracking();
+    this.updateDeployCursorClasses();
+
+    if (areaId && this.deployDragSessionActive) {
+      const area = this.deployAreas.get(areaId);
+      if (area) {
+        this.deployAreaDirty = false;
+        this.persistDeployAreaUpdate(area);
+      }
+    }
+
+    this.deployDragSessionActive = false;
   }
 
   private applyDeployDrag(current: Coordinate): void {
@@ -925,6 +965,7 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
     this.updateDeployAreaFeature(area);
     this.refreshDeployStyles();
+    this.deployAreaDirty = true;
   }
 
   private addDeployArea(
@@ -949,6 +990,111 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
     this.deployAreaSource.addFeature(feature);
     this.deployMapHint = 'Click on the map to place or select a deploy area';
     this.selectDeployArea(area.id);
+    this.persistDeployAreaCreate(area);
+  }
+
+  private loadSavedDeployAreas(): void {
+    this.deployAreaApi.listDeployAreas().subscribe({
+      next: (records) => {
+        for (const record of records) {
+          this.restoreDeployArea(this.deployAreaApi.toDeployArea(record));
+        }
+        this.syncDeployAreaCounter();
+        this.cdr.markForCheck();
+      },
+      error: (error) => console.error('Failed to load deploy areas from database', error),
+    });
+  }
+
+  private restoreDeployArea(area: DeployArea): void {
+    this.deployAreas.set(area.id, area);
+    const feature = this.createDeployFeature(area);
+    this.deployAreaFeatures.set(area.id, feature);
+    this.deployAreaSource.addFeature(feature);
+  }
+
+  private syncDeployAreaCounter(): void {
+    let maxCounter = 0;
+
+    for (const areaId of this.deployAreas.keys()) {
+      const match = /^area-(\d+)$/.exec(areaId);
+      if (match) {
+        maxCounter = Math.max(maxCounter, Number(match[1]));
+      }
+    }
+
+    this.deployAreaCounter = maxCounter;
+  }
+
+  private persistDeployAreaCreate(area: DeployArea): void {
+    this.deployAreaApi.createDeployArea(this.deployAreaApi.fromDeployArea(area)).subscribe({
+      error: (error) => console.error('Failed to save deploy area to database', error),
+    });
+  }
+
+  private commitDeployAreaChanges(areaId: string | null = this.selectedDeployAreaId): void {
+    if (!areaId || !this.deployAreaDirty) {
+      return;
+    }
+
+    const area = this.deployAreas.get(areaId);
+    if (!area) {
+      this.deployAreaDirty = false;
+      return;
+    }
+
+    this.deployAreaDirty = false;
+    this.persistDeployAreaUpdate(area);
+  }
+
+  private persistDeployAreaUpdate(area: DeployArea): void {
+    this.deployAreaApi
+      .updateDeployArea(area.id, this.deployAreaApi.updateRequestFromDeployArea(area))
+      .subscribe({
+        error: (error) => {
+          console.error('Failed to update deploy area in database', error);
+          this.deployAreaDirty = true;
+        },
+      });
+  }
+
+  private attachDeployWindowPointerTracking(): void {
+    this.detachDeployWindowPointerTracking();
+
+    const toPayload = (nativeEvent: PointerEvent): DeployPointerPayload => ({
+      coordinate: this.map!.getCoordinateFromPixel(this.map!.getEventPixel(nativeEvent)),
+      pixel: this.map!.getEventPixel(nativeEvent),
+    });
+
+    const moveHandler = (nativeEvent: PointerEvent) => {
+      if (!this.map || !this.deployDragState || !this.deployPointerDown) {
+        return;
+      }
+
+      this.onDeployPointerMove(toPayload(nativeEvent));
+    };
+
+    const upHandler = (nativeEvent: PointerEvent) => {
+      if (!this.map || !this.deployDragState) {
+        return;
+      }
+
+      this.onDeployPointerUp(toPayload(nativeEvent));
+    };
+
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+    this.deployWindowPointerCleanup = () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+    };
+  }
+
+  private detachDeployWindowPointerTracking(): void {
+    this.deployWindowPointerCleanup?.();
+    this.deployWindowPointerCleanup = null;
   }
 
   private createDeployFeature(area: DeployArea): Feature<Polygon> {
@@ -1076,9 +1222,12 @@ export class AerialDeviceMapComponent implements AfterViewInit, OnChanges, OnDes
 
   private selectDeployArea(areaId: string): void {
     this.clearReshapeHandles();
+    const reselectingSameArea = this.selectedDeployAreaId === areaId;
     this.selectedDeployAreaId = areaId;
     this.deployCardVisible = true;
-    this.activeDeployAction = null;
+    if (!reselectingSameArea) {
+      this.activeDeployAction = null;
+    }
     this.updateDeployCursorClasses();
     this.refreshDeployStyles();
     this.cdr.markForCheck();

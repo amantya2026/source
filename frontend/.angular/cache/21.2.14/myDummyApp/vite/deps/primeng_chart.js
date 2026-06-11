@@ -1,21 +1,21 @@
 import {
-  Chart,
-  registerables
-} from "./chunk-B4A5MMGX.js";
-import {
   BaseComponent
 } from "./chunk-HFZ3IEIT.js";
-import {
-  Bind,
-  BindModule
-} from "./chunk-RTWT2CPK.js";
 import {
   BaseStyle
 } from "./chunk-7DJM2MRT.js";
 import {
   SharedModule
 } from "./chunk-T3AZFDUA.js";
+import {
+  Bind,
+  BindModule
+} from "./chunk-RTWT2CPK.js";
 import "./chunk-I6IMDBTQ.js";
+import {
+  Chart,
+  registerables
+} from "./chunk-B4A5MMGX.js";
 import {
   CommonModule,
   isPlatformBrowser

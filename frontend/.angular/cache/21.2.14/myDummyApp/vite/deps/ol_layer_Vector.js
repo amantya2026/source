@@ -1,9 +1,11 @@
 import {
-  lineStringLength
-} from "./chunk-SX6VJL3J.js";
+  Layer_default,
+  ZIndexContext_default,
+  canvasPool
+} from "./chunk-2IUEWNTT.js";
 import {
   BaseVector_default
-} from "./chunk-Z2XKM4SA.js";
+} from "./chunk-7DI3YWK2.js";
 import "./chunk-6MQFOTFN.js";
 import {
   Icon_default,
@@ -27,37 +29,37 @@ import {
   registerFont
 } from "./chunk-LK7OZQZ2.js";
 import {
-  Layer_default,
-  ZIndexContext_default,
-  canvasPool
-} from "./chunk-EXVMVZI5.js";
-import {
   EventType_default
-} from "./chunk-CDZ2HFIF.js";
-import {
-  ViewHint_default
-} from "./chunk-FTH7EFSQ.js";
-import "./chunk-P3G6H5S3.js";
+} from "./chunk-IV6LG5SU.js";
 import "./chunk-V5DQGEN3.js";
 import {
   ImageState_default,
   createCanvasContext2D,
   releaseCanvas
 } from "./chunk-TLMEWSOH.js";
-import "./chunk-YTRWJNA4.js";
+import "./chunk-JZYPKUF6.js";
+import {
+  ViewHint_default
+} from "./chunk-PMEMXWEM.js";
+import "./chunk-P3G6H5S3.js";
+import "./chunk-6NHAKJI5.js";
+import {
+  lineStringLength
+} from "./chunk-SX6VJL3J.js";
+import "./chunk-ME7KGR2H.js";
+import "./chunk-MEMLSL66.js";
 import {
   inflateCoordinates,
   inflateCoordinatesArray,
   inflateMultiCoordinatesArray,
   snap
 } from "./chunk-YU36N7WN.js";
-import "./chunk-PNC6JOPQ.js";
-import "./chunk-HD3USLIS.js";
 import {
   rotate,
   transform2D,
   transformGeom2D
-} from "./chunk-DVZ2KUCE.js";
+} from "./chunk-TEBJLV6S.js";
+import "./chunk-PNC6JOPQ.js";
 import {
   apply,
   compose,
@@ -70,10 +72,7 @@ import {
   getUserProjection,
   toUserExtent,
   toUserResolution
-} from "./chunk-PUZBTDX2.js";
-import "./chunk-N643VJ64.js";
-import "./chunk-6NHAKJI5.js";
-import "./chunk-JZYPKUF6.js";
+} from "./chunk-VCLZ4PGI.js";
 import {
   Relationship_default,
   angleBetween,
@@ -92,6 +91,7 @@ import {
   wrapX,
   wrapX2
 } from "./chunk-F54ISTXV.js";
+import "./chunk-N643VJ64.js";
 import {
   clamp,
   lerp,

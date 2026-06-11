@@ -121,19 +121,12 @@ export function snapToNearestEventProgress(
   return nearest;
 }
 
-export function progressFromElapsed(
-  line: LineString,
-  speedKmh: number,
-  elapsedMs: number
-): number {
-  const lineLength = getLength(line);
-  if (lineLength <= 0) {
+export function progressFromElapsed(elapsedMs: number, travelDurationMs: number): number {
+  if (travelDurationMs <= 0) {
     return 0;
   }
 
-  const speedMs = (Math.max(speedKmh, 1) * 1000) / 3600;
-  const distanceTraveled = speedMs * (elapsedMs / 1000);
-  return Math.min(1, distanceTraveled / lineLength);
+  return Math.min(1, elapsedMs / travelDurationMs);
 }
 
 export function mergeEventProgressSteps(eventProgressLists: number[][]): number[] {

@@ -15,6 +15,10 @@ public final class PlanTimelineUtil {
         return Math.min(travelMinutes, FUEL_CAPACITY_MINUTES);
     }
 
+    public static long travelDurationMsForPlan(double distanceMeters, double speedKmh) {
+        return Math.round(travelMinutesForPlan(distanceMeters, speedKmh) * 60_000.0);
+    }
+
     public static Instant planEndTime(Instant startingDate, double distanceMeters, double speedKmh) {
         long durationMinutes = (long) Math.ceil(travelMinutesForPlan(distanceMeters, speedKmh));
         return startingDate.plus(durationMinutes, ChronoUnit.MINUTES);
