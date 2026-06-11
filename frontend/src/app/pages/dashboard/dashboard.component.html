@@ -38,6 +38,78 @@
         </button>
       </nav>
 
+      <section class="tracking-mode" aria-label="Tracking mode">
+        <p class="field-label">Tracking mode</p>
+        <div class="tracking-mode-card">
+          <label class="tracking-mode-option" for="mode-time">
+            <p-radiobutton
+              name="playbackMode"
+              value="time"
+              [(ngModel)]="playbackMode"
+              inputId="mode-time"
+            />
+            <span class="tracking-mode-option__text">
+              <span class="tracking-mode-option__title">Time-Based Tracking</span>
+              <span class="tracking-mode-option__desc">Fixed intervals telemetry refresh</span>
+            </span>
+          </label>
+          <label class="tracking-mode-option" for="mode-event">
+            <p-radiobutton
+              name="playbackMode"
+              value="event"
+              [(ngModel)]="playbackMode"
+              inputId="mode-event"
+            />
+            <span class="tracking-mode-option__text">
+              <span class="tracking-mode-option__title">Event-Based Tracking</span>
+              <span class="tracking-mode-option__desc">Updates only at specific events</span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <section class="playback-controls" aria-label="Simulation controls">
+        <p class="field-label">Playback</p>
+        <div class="playback-controls-list">
+          <button
+            type="button"
+            class="playback-btn"
+            [disabled]="!canPlaySimulation"
+            (click)="onPlay()"
+          >
+            <i class="pi pi-play" aria-hidden="true"></i>
+            <span>Play</span>
+          </button>
+          <button
+            type="button"
+            class="playback-btn"
+            [disabled]="!canPauseSimulation"
+            (click)="onPause()"
+          >
+            <i class="pi pi-pause" aria-hidden="true"></i>
+            <span>Pause</span>
+          </button>
+          <button
+            type="button"
+            class="playback-btn"
+            [disabled]="!canResumeSimulation"
+            (click)="onResume()"
+          >
+            <i class="pi pi-play-circle" aria-hidden="true"></i>
+            <span>Resume</span>
+          </button>
+          <button
+            type="button"
+            class="playback-btn"
+            [disabled]="!canStopSimulation"
+            (click)="onStop()"
+          >
+            <i class="pi pi-stop" aria-hidden="true"></i>
+            <span>Stop</span>
+          </button>
+        </div>
+      </section>
+
       <div class="aircraft-cards">
         <p class="field-label">Aircraft status</p>
         @for (aircraft of aircraftSlots; track aircraft.slot) {
@@ -115,78 +187,6 @@
       @if (currentTime) {
         <div class="map-current-time">{{ currentTime }}</div>
       }
-    </div>
-
-    <div class="map-toolbar">
-      <div class="transport-controls">
-        <button
-          type="button"
-          class="map-toolbar-btn"
-          aria-label="Play"
-          pTooltip="Play"
-          tooltipPosition="bottom"
-          [disabled]="!canPlaySimulation"
-          (click)="onPlay()"
-        >
-          <i class="pi pi-play"></i>
-        </button>
-        <button
-          type="button"
-          class="map-toolbar-btn"
-          aria-label="Pause"
-          pTooltip="Pause"
-          tooltipPosition="bottom"
-          [disabled]="!canPauseSimulation"
-          (click)="onPause()"
-        >
-          <i class="pi pi-pause"></i>
-        </button>
-        <button
-          type="button"
-          class="map-toolbar-btn"
-          aria-label="Resume"
-          pTooltip="Resume"
-          tooltipPosition="bottom"
-          [disabled]="!canResumeSimulation"
-          (click)="onResume()"
-        >
-          <i class="pi pi-play-circle"></i>
-        </button>
-        <button
-          type="button"
-          class="map-toolbar-btn"
-          aria-label="Stop"
-          pTooltip="Stop"
-          tooltipPosition="bottom"
-          [disabled]="!canStopSimulation"
-          (click)="onStop()"
-        >
-          <i class="pi pi-stop"></i>
-        </button>
-      </div>
-
-      <div class="mode-controls">
-        <label class="mode-option">
-          <p-radiobutton
-            name="playbackMode"
-            value="event"
-            size="large"
-            [(ngModel)]="playbackMode"
-            inputId="mode-event"
-          />
-          <span>Event based tracking</span>
-        </label>
-        <label class="mode-option">
-          <p-radiobutton
-            name="playbackMode"
-            value="time"
-            size="large"
-            [(ngModel)]="playbackMode"
-            inputId="mode-time"
-          />
-          <span>Time based tracking</span>
-        </label>
-      </div>
     </div>
 
     @if (activePanel === 'plan') {

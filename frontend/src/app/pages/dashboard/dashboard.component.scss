@@ -124,6 +124,115 @@ $op-dash-overlay-width: 22rem;
     }
   }
 
+  .tracking-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .tracking-mode-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.75rem;
+    border: 1px solid var(--p-content-border-color);
+    border-radius: var(--p-border-radius-md);
+    background: var(--p-surface-50);
+  }
+
+  .tracking-mode-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.15rem 0;
+    cursor: pointer;
+    border-radius: var(--p-border-radius-sm);
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: rgba(52, 211, 153, 0.06);
+    }
+  }
+
+  .tracking-mode-option__text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+
+  .tracking-mode-option__title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--p-text-color);
+  }
+
+  .tracking-mode-option__desc {
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: var(--p-text-muted-color);
+  }
+
+  .playback-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .playback-controls-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .playback-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.5rem 0.55rem;
+    border: 1px solid var(--p-content-border-color);
+    border-radius: var(--p-border-radius-md);
+    background: var(--p-surface-0);
+    color: var(--p-text-color);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+    i {
+      font-size: 0.9rem;
+      color: #34d399;
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    &:not(:disabled):hover {
+      background: rgba(52, 211, 153, 0.08);
+      border-color: #34d399;
+    }
+
+    &:not(:disabled):active {
+      background: #34d399;
+      border-color: #34d399;
+      color: #ffffff;
+
+      i {
+        color: #ffffff;
+      }
+    }
+  }
+
   .aircraft-cards {
     flex: 1;
     min-height: 0;
@@ -354,7 +463,7 @@ $op-dash-overlay-width: 22rem;
   height: auto;
 }
 
-.map-toolbar {
+.map-toolbar--bottom {
   position: absolute;
   left: 50%;
   z-index: 10;
@@ -368,67 +477,8 @@ $op-dash-overlay-width: 22rem;
   box-shadow: 0 4px 18px rgba(15, 23, 42, 0.1);
   transform: translateX(-50%);
   pointer-events: auto;
-
-  &:not(.map-toolbar--bottom) {
-    top: 0.85rem;
-  }
-}
-
-.map-toolbar--bottom {
   bottom: 0.85rem;
   width: min(90rem, calc(100% - 2rem));
-  left: 50%;
-}
-
-.transport-controls {
-  display: flex;
-  gap: 0.55rem;
-}
-
-.map-toolbar-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.65rem;
-  height: 2.65rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 50%;
-  background: var(--p-surface-0);
-  color: #34d399;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  &:not(:disabled):hover {
-    background: var(--p-surface-50);
-    border-color: #34d399;
-  }
-}
-
-.mode-controls {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding-left: 0.5rem;
-  border-left: 1px solid var(--p-content-border-color);
-}
-
-.mode-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.35rem 0.55rem;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: var(--p-text-color);
-  white-space: nowrap;
 }
 
 .timeline-track {
@@ -471,6 +521,32 @@ $op-dash-overlay-width: 22rem;
 }
 
 $theme-green: #34d399;
+
+:host ::ng-deep .tracking-mode {
+  .p-radiobutton {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .p-radiobutton-box {
+    border-color: var(--p-content-border-color);
+    background: var(--p-surface-0);
+  }
+
+  .p-radiobutton-checked .p-radiobutton-box {
+    border-color: $theme-green;
+    background: var(--p-surface-0);
+  }
+
+  .p-radiobutton-checked .p-radiobutton-icon {
+    background: $theme-green;
+    transform: translateZ(0) scale(1);
+  }
+
+  .p-radiobutton:not(.p-disabled):has(.p-radiobutton-input:hover) .p-radiobutton-box {
+    border-color: $theme-green;
+  }
+}
 
 :host ::ng-deep .timeline-track {
   .p-slider {
@@ -585,31 +661,20 @@ $theme-green: #34d399;
     max-height: calc(100% - 8rem);
   }
 
-  .map-toolbar {
-    left: 0.5rem;
-    right: 0.5rem;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.65rem;
-    border-radius: var(--p-border-radius-lg);
-    transform: none;
-    width: auto;
-  }
-
   .map-toolbar--bottom {
     bottom: 0.5rem;
     left: 0.5rem;
     right: 0.5rem;
     width: auto;
+    transform: none;
+    border-radius: var(--p-border-radius-lg);
   }
 
-  .mode-controls {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.35rem;
-    padding-left: 0;
-    border-left: none;
-    border-top: 1px solid var(--p-content-border-color);
-    padding-top: 0.55rem;
+  .playback-controls-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tracking-mode-card {
+    gap: 0.5rem;
   }
 }

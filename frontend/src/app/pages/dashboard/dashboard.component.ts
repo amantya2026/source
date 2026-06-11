@@ -13,7 +13,6 @@ import { ButtonModule } from 'primeng/button';
 import { RadioButtonModule } from 'primeng/radiobutton';
 import { SliderModule } from 'primeng/slider';
 import { ToastModule } from 'primeng/toast';
-import { TooltipModule } from 'primeng/tooltip';
 import {
   FUEL_CAPACITY_LITERS,
   MARKER_SHAPES,
@@ -58,7 +57,6 @@ interface AircraftSlotInfo {
     RadioButtonModule,
     SliderModule,
     ToastModule,
-    TooltipModule,
     AerialDeviceMapComponent,
     PlanPanelComponent,
     OpDashPanelComponent,
