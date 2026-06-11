@@ -1,5 +1,9 @@
 # See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 6b404292 (Wire git to workspace and clean up tracked build artifacts.)
 # Frontend (Angular)
 /frontend/dist
 /frontend/tmp
@@ -7,12 +11,19 @@
 /frontend/node_modules
 /frontend/.angular/cache
 /frontend/coverage
+<<<<<<< HEAD
  
 # Backend (Maven / Spring Boot)
 backend/target
 /backend/target/*
 backend/target/
  
+=======
+
+# Backend (Maven / Spring Boot)
+/backend/target
+
+>>>>>>> 6b404292 (Wire git to workspace and clean up tracked build artifacts.)
 # IDEs and editors
 .idea/
 .project
@@ -21,7 +32,11 @@ backend/target/
 *.launch
 .settings/
 *.sublime-workspace
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 6b404292 (Wire git to workspace and clean up tracked build artifacts.)
 # Visual Studio Code
 .vscode/*
 !.vscode/settings.json
@@ -29,14 +44,25 @@ backend/target/
 !.vscode/launch.json
 !.vscode/extensions.json
 .history/*
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 6b404292 (Wire git to workspace and clean up tracked build artifacts.)
 # Logs
 npm-debug.log
 yarn-error.log
 testem.log
+<<<<<<< HEAD
  
 # System files
 .DS_Store
 Thumbs.db
 
 .git_local_credentials
+=======
+
+# System files
+.DS_Store
+Thumbs.db
+>>>>>>> 6b404292 (Wire git to workspace and clean up tracked build artifacts.)
